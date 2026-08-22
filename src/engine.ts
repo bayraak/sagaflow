@@ -57,13 +57,21 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   // expressed by an implementation that accepts every event there is.
   const emit = record as EmitFn<EventsOf<Ctx>>
 
-  const stepContext: StepContext<Ctx> = { ...ctx, runId, emit }
+  // A context per step rather than one for the run, because the key each step is handed has
+  // to be its own.
+  const contextFor = (idempotencyKey: string): StepContext<Ctx> => ({
+    ...ctx,
+    runId,
+    emit,
+    idempotencyKey,
+  })
 
   const handle: WorkflowHandle<Ctx> = {
     emit,
     step: async (step, input) => {
       const current = seq
       seq += 1
+      const stepContext = contextFor(`${runId}:${current}`)
 
       // The compensation is registered from the value the step RETURNED, never from a closure
       // taken during it: on a durable replay the step body does not run again, and a
@@ -104,7 +112,9 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
         undos.push({
           name: step.name,
           config: step.config,
-          run: () => compensate(compensateWith, stepContext),
+          // Undoing a charge is a refund, not the charge again: a different side effect, and
+          // so a different key.
+          run: () => compensate(compensateWith, contextFor(`${runId}:${current}:undo`)),
         })
       }
 

@@ -193,7 +193,17 @@ export type EmitFn<Events extends EventSchemaMap = EventSchemaMap> = {
   ): void
 }
 
-export type StepContext<Ctx> = Ctx & { runId: string; emit: EmitFn<EventsOf<Ctx>> }
+/**
+ * What a step is handed. `idempotencyKey` is the step's own — `${runId}:${seq}`, and
+ * `${runId}:${seq}:undo` for a compensation — stable across every attempt and every replay of
+ * that step, and different for every other step in the run. Hand it to a provider that takes
+ * an idempotency header and a retried step stops being a second charge.
+ */
+export type StepContext<Ctx> = Ctx & {
+  runId: string
+  emit: EmitFn<EventsOf<Ctx>>
+  idempotencyKey: string
+}
 
 export type Step<Ctx, Input, Output, Compensation> = {
   name: string

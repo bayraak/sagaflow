@@ -38,3 +38,26 @@ export const passThroughPrimitive = (): StepPrimitive => ({
   sleep: async () => undefined,
   waitForEvent: async () => undefined as never,
 })
+
+/**
+ * A platform that retries. The first attempt of every named step is allowed to fail; the
+ * second is reported as attempt two, which is how a suite can watch what a step sees when it
+ * is tried again.
+ */
+export const createRetryingPrimitive = (options: { attempts: number }): StepPrimitive => ({
+  do: async (_name, _config, run) => {
+    let lastError: unknown
+
+    for (let attempt = 1; attempt <= options.attempts; attempt += 1) {
+      try {
+        return await run({ attempt })
+      } catch (error) {
+        lastError = error
+      }
+    }
+
+    throw lastError
+  },
+  sleep: async () => undefined,
+  waitForEvent: async () => undefined as never,
+})
