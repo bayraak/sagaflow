@@ -2,17 +2,16 @@ import { createStep, defineWorkflow, type WorkflowHandle } from '../../src/index
 import type { TestRuntime } from './runtime'
 import { markInput, markStep, type MarkInput, type MarkOutput, type MarkUndo } from './steps'
 
-export const emittingStep = createStep<TestRuntime, MarkInput, MarkOutput, MarkUndo>(
-  'emitting',
-  async (input, ctx) => {
+export const emittingStep = createStep<TestRuntime, MarkInput, MarkOutput, MarkUndo>('emitting', {
+  run: async (input, ctx) => {
     ctx.emit('invoice.issued', { invoiceId: input.mark, total: 1 })
 
     return { output: { seen: input.mark }, compensateWith: { undo: 'emitting' } }
   },
-  async (undo, ctx) => {
+  compensate: async (undo, ctx) => {
     ctx.invocations.push(`compensate:${undo.undo}`)
   },
-)
+})
 
 export const emittingWorkflow = (options: { badPayload?: boolean; fails?: boolean } = {}) => {
   const after = markStep('after', { fails: options.fails })

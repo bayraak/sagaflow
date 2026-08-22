@@ -13,7 +13,7 @@ type WorkflowConfig<Input extends StandardSchemaV1, Execution extends WorkflowEx
   name: string
   input: Input
   execution: Execution
-  idempotency?: (input: StandardSchemaV1.InferOutput<Input>) => string
+  idempotency?(input: StandardSchemaV1.InferOutput<Input>): string
 }
 
 export type InlineWorkflow<Ctx extends WorkflowRuntime, Input extends StandardSchemaV1, Output> = {
@@ -21,13 +21,13 @@ export type InlineWorkflow<Ctx extends WorkflowRuntime, Input extends StandardSc
   execution: 'inline'
   input: Input
   output?: StandardSchemaV1
-  idempotency?: (input: StandardSchemaV1.InferOutput<Input>) => string
-  body: (input: StandardSchemaV1.InferOutput<Input>, wf: WorkflowHandle<Ctx>) => Promise<Output>
-  run: (options: {
+  idempotency?(input: StandardSchemaV1.InferOutput<Input>): string
+  body(input: StandardSchemaV1.InferOutput<Input>, wf: WorkflowHandle<Ctx>): Promise<Output>
+  run(options: {
     input: unknown
     ctx: Ctx
     parentRunId?: string | null
-  }) => Promise<InlineRunResult<Output>>
+  }): Promise<InlineRunResult<Output>>
 }
 
 export type DurableWorkflow<Ctx extends WorkflowRuntime, Input extends StandardSchemaV1, Output> = {
@@ -35,11 +35,8 @@ export type DurableWorkflow<Ctx extends WorkflowRuntime, Input extends StandardS
   execution: 'durable'
   input: Input
   output?: StandardSchemaV1
-  idempotency?: (input: StandardSchemaV1.InferOutput<Input>) => string
-  body: (
-    input: StandardSchemaV1.InferOutput<Input>,
-    wf: DurableWorkflowHandle<Ctx>,
-  ) => Promise<Output>
+  idempotency?(input: StandardSchemaV1.InferOutput<Input>): string
+  body(input: StandardSchemaV1.InferOutput<Input>, wf: DurableWorkflowHandle<Ctx>): Promise<Output>
 }
 
 export type AnyWorkflow<Ctx extends WorkflowRuntime> =

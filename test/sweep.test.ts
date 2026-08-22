@@ -28,7 +28,8 @@ describe('runs nobody is going to finish', () => {
     const runId = await openRun(journal, { execution: 'inline', name: 'invoice.create' })
 
     clock = 10 * minute
-    const swept = await sweepAbandonedRuns(journal.journal, {
+    const swept = await sweepAbandonedRuns({
+      journal: journal.journal,
       now: clock,
       olderThanMs: 5 * minute,
     })
@@ -43,7 +44,11 @@ describe('runs nobody is going to finish', () => {
     await openRun(journal, { execution: 'inline', name: 'invoice.create' })
 
     clock = 10 * minute
-    await sweepAbandonedRuns(journal.journal, { now: clock, olderThanMs: 5 * minute })
+    await sweepAbandonedRuns({
+      journal: journal.journal,
+      now: clock,
+      olderThanMs: 5 * minute,
+    })
 
     expect(journal.runs[0]?.error).toBe('abandoned: no finish after 300000ms')
   })
@@ -54,7 +59,8 @@ describe('runs nobody is going to finish', () => {
     await openRun(journal, { execution: 'inline', name: 'invoice.create' })
 
     clock = 2 * minute
-    const swept = await sweepAbandonedRuns(journal.journal, {
+    const swept = await sweepAbandonedRuns({
+      journal: journal.journal,
       now: clock,
       olderThanMs: 5 * minute,
     })
@@ -69,7 +75,8 @@ describe('runs nobody is going to finish', () => {
     await openRun(journal, { execution: 'durable', name: 'invoice.send' })
 
     clock = 400 * minute
-    const swept = await sweepAbandonedRuns(journal.journal, {
+    const swept = await sweepAbandonedRuns({
+      journal: journal.journal,
       now: clock,
       olderThanMs: 5 * minute,
     })
@@ -90,7 +97,8 @@ describe('runs nobody is going to finish', () => {
     })
 
     clock = 10 * minute
-    const swept = await sweepAbandonedRuns(journal.journal, {
+    const swept = await sweepAbandonedRuns({
+      journal: journal.journal,
       now: clock,
       olderThanMs: 5 * minute,
     })
@@ -115,8 +123,12 @@ describe('runs nobody is going to finish', () => {
 
     clock = 10 * minute
 
-    expect(await sweepAbandonedRuns(journal.journal, { now: clock, olderThanMs: 5 * minute })).toBe(
-      2,
-    )
+    expect(
+      await sweepAbandonedRuns({
+        journal: journal.journal,
+        now: clock,
+        olderThanMs: 5 * minute,
+      }),
+    ).toBe(2)
   })
 })

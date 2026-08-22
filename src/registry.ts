@@ -1,7 +1,7 @@
 import type { DurableWorkflow } from './define'
 import { executeDurable } from './durable'
 import { startDurableWorkflow } from './start'
-import type { DurableWorkflowEnv, StandardSchemaV1, StepPrimitive, WorkflowRuntime } from './types'
+import type { StandardSchemaV1, StepPrimitive, WorkflowLauncher, WorkflowRuntime } from './types'
 
 /**
  * A registered workflow is its name and two ways to reach it. Registering erases the
@@ -11,11 +11,11 @@ import type { DurableWorkflowEnv, StandardSchemaV1, StepPrimitive, WorkflowRunti
  */
 export type RegisteredWorkflow<Ctx extends WorkflowRuntime> = {
   name: string
-  execute: (
+  execute(
     params: { runId: string; input: unknown },
     ctx: Ctx,
     step: StepPrimitive,
-  ) => Promise<unknown>
+  ): Promise<unknown>
   /*
    * Starting one by NAME, which is the only way a replay can start one. Registration is
    * already what makes a definition reachable by the dispatcher; this makes it the same thing
@@ -23,10 +23,13 @@ export type RegisteredWorkflow<Ctx extends WorkflowRuntime> = {
    * dispatchable. The input arrives as `unknown` and is parsed by the definition's own schema
    * inside, exactly as it is for a first run.
    */
-  start: (
-    env: DurableWorkflowEnv,
-    options: { input: unknown; ctx: Ctx; replayOf?: string; parentRunId?: string | null },
-  ) => Promise<{ runId: string; deduplicated: boolean }>
+  start(options: {
+    launcher: WorkflowLauncher
+    input: unknown
+    ctx: Ctx
+    replayOf?: string
+    parentRunId?: string | null
+  }): Promise<{ runId: string; deduplicated: boolean }>
 }
 
 export const registerDurableWorkflow = <
@@ -38,13 +41,27 @@ export const registerDurableWorkflow = <
 ): RegisteredWorkflow<Ctx> => ({
   name: definition.name,
   execute: (params, ctx, step) => executeDurable(definition, params, ctx, step),
-  start: (env, options) => startDurableWorkflow(env, definition, options),
+  start: ({ launcher, ...options }) => startDurableWorkflow({ launcher, definition, ...options }),
 })
 
+/**
+ * Everything a dispatcher can reach, by the name an instance was created with.
+ *
+ * Hand it the definitions themselves — registering each one is the library's ceremony, not
+ * yours. Registration erases a definition's own input and output types at the boundary, which
+ * is the point: a dispatcher looks a workflow up by a name that arrived as a string, so it
+ * cannot know which one it found, and each definition keeps its types on the inside.
+ */
 export const createDurableRegistry = <Ctx extends WorkflowRuntime>(
-  workflows: RegisteredWorkflow<Ctx>[],
-) => {
-  const byName = new Map(workflows.map((workflow) => [workflow.name, workflow]))
+  workflows: (DurableWorkflow<Ctx, StandardSchemaV1, unknown> | RegisteredWorkflow<Ctx>)[],
+): {
+  names: () => string[]
+  find: (name: string) => RegisteredWorkflow<Ctx> | undefined
+} => {
+  const registered = workflows.map((workflow) =>
+    'execution' in workflow ? registerDurableWorkflow(workflow) : workflow,
+  )
+  const byName = new Map(registered.map((workflow) => [workflow.name, workflow]))
 
   return {
     names: () => [...byName.keys()],

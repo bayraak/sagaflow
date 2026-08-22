@@ -7,13 +7,15 @@ import { markInput } from './helpers/steps'
 
 const issuingStep = createStep<TestRuntime, { mark: string }, { seen: string }, { undo: string }>(
   'issue',
-  async (input, ctx) => {
-    ctx.invocations.push('invoke:issue')
-    ctx.emit('invoice.issued', { invoiceId: input.mark, total: 10 })
+  {
+    run: async (input, ctx) => {
+      ctx.invocations.push('invoke:issue')
+      ctx.emit('invoice.issued', { invoiceId: input.mark, total: 10 })
 
-    return { output: { seen: input.mark }, compensateWith: { undo: input.mark } }
+      return { output: { seen: input.mark }, compensateWith: { undo: input.mark } }
+    },
+    compensate: async () => undefined,
   },
-  async () => undefined,
 )
 
 const replayable = defineWorkflow(

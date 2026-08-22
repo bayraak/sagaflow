@@ -6,14 +6,14 @@ import {
   WorkflowError,
   type DurableWorkflowHandle,
   type StepPrimitive,
-  type StepRetryConfig,
+  type StepBudget,
 } from '../src/index'
 import { createFakePrimitive } from './helpers/primitive'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
 
-const durableWorkflow = (options: { config?: StepRetryConfig; failOn?: string } = {}) => {
-  const first = markStep('first', { config: options.config })
+const durableWorkflow = (options: { budget?: StepBudget; failOn?: string } = {}) => {
+  const first = markStep('first', { budget: options.budget })
   const second = markStep('second', { fails: options.failOn === 'second' })
 
   return defineWorkflow(
@@ -77,14 +77,14 @@ describe('the durable executor drives the same body through step primitives', ()
   it('passes the step retry config through', async () => {
     const harness = createTestRuntime()
     const { primitive, calls } = createFakePrimitive({ event: { ok: true } })
-    const config: StepRetryConfig = {
+    const budget: StepBudget = {
       retries: { limit: 7, delay: '3 seconds', backoff: 'linear' },
       timeout: '30 seconds',
     }
 
-    await durableRun(durableWorkflow({ config }), harness, primitive)
+    await durableRun(durableWorkflow({ budget }), harness, primitive)
 
-    expect(calls.find((call) => call.name === 'first')?.config).toEqual(config)
+    expect(calls.find((call) => call.name === 'first')?.config).toEqual(budget)
   })
 
   it('defaults the retry config when none is declared', async () => {

@@ -14,7 +14,17 @@
     "typescript/prefer-ts-expect-error": "error",
     "unicorn/filename-case": "error",
     "unicorn/prefer-node-protocol": "error",
-    "unicorn/throw-new-error": "error"
+    "unicorn/throw-new-error": "error",
+    "import/no-cycle": "error",
+    "import/no-default-export": "error"
   },
-  "ignorePatterns": ["node_modules", "dist", ".wrangler"]
+  "ignorePatterns": ["node_modules", "dist", ".wrangler"],
+  "overrides": [
+    {
+      "files": ["src/**/*.ts"],
+      "rules": {
+        "typescript/explicit-function-return-type": "error"
+      }
+    }
+  ]
 }

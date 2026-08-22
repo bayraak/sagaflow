@@ -28,9 +28,14 @@ const startable = () =>
 describe('starting a durable workflow', () => {
   it('opens the run record before the instance exists', async () => {
     const { ctx, runs } = createTestRuntime()
-    const { env, created } = createLauncher()
+    const { launcher, created } = createLauncher()
 
-    const { runId } = await startDurableWorkflow(env, startable(), { input: { mark: 'x' }, ctx })
+    const { runId } = await startDurableWorkflow({
+      launcher,
+      definition: startable(),
+      input: { mark: 'x' },
+      ctx,
+    })
 
     expect(firstRun(runs).id).toBe(runId)
     expect(firstRun(runs).execution).toBe('durable')
@@ -40,9 +45,14 @@ describe('starting a durable workflow', () => {
 
   it('hands the instance the tenant, the actor, the input and the run', async () => {
     const { ctx } = createTestRuntime()
-    const { env, created } = createLauncher()
+    const { launcher, created } = createLauncher()
 
-    const { runId } = await startDurableWorkflow(env, startable(), { input: { mark: 'x' }, ctx })
+    const { runId } = await startDurableWorkflow({
+      launcher,
+      definition: startable(),
+      input: { mark: 'x' },
+      ctx,
+    })
 
     expect(created[0]?.params).toEqual({
       name: 'test.startable',
@@ -55,11 +65,14 @@ describe('starting a durable workflow', () => {
 
   it('refuses an input the schema does not accept, leaving no run and no instance', async () => {
     const { ctx, runs } = createTestRuntime()
-    const { env, created } = createLauncher()
+    const { launcher, created } = createLauncher()
 
-    await startDurableWorkflow(env, startable(), { input: { mark: '' }, ctx }).catch(
-      () => undefined,
-    )
+    await startDurableWorkflow({
+      launcher,
+      definition: startable(),
+      input: { mark: '' },
+      ctx,
+    }).catch(() => undefined)
 
     expect(runs).toEqual([])
     expect(created).toEqual([])
@@ -67,11 +80,21 @@ describe('starting a durable workflow', () => {
 
   it('answers a held key with the run that holds it, and starts nothing', async () => {
     const { ctx, runs } = createTestRuntime()
-    const { env, created } = createLauncher()
+    const { launcher, created } = createLauncher()
     const definition = startable()
 
-    const first = await startDurableWorkflow(env, definition, { input: { mark: 'x' }, ctx })
-    const second = await startDurableWorkflow(env, definition, { input: { mark: 'x' }, ctx })
+    const first = await startDurableWorkflow({
+      launcher,
+      definition: definition,
+      input: { mark: 'x' },
+      ctx,
+    })
+    const second = await startDurableWorkflow({
+      launcher,
+      definition: definition,
+      input: { mark: 'x' },
+      ctx,
+    })
 
     expect(second).toEqual({ runId: first.runId, deduplicated: true })
     expect(runs).toHaveLength(1)
@@ -83,11 +106,18 @@ describe('starting a durable workflow', () => {
   // told "already done" — the one answer a replay must never give.
   it('keys a replay on the run it is replaying', async () => {
     const { ctx, runs } = createTestRuntime()
-    const { env } = createLauncher()
+    const { launcher } = createLauncher()
     const definition = startable()
 
-    const first = await startDurableWorkflow(env, definition, { input: { mark: 'x' }, ctx })
-    const replay = await startDurableWorkflow(env, definition, {
+    const first = await startDurableWorkflow({
+      launcher,
+      definition: definition,
+      input: { mark: 'x' },
+      ctx,
+    })
+    const replay = await startDurableWorkflow({
+      launcher,
+      definition: definition,
       input: { mark: 'x' },
       ctx,
       replayOf: first.runId,
@@ -100,16 +130,25 @@ describe('starting a durable workflow', () => {
 
   it('answers the same replay asked for twice with one replay', async () => {
     const { ctx, runs } = createTestRuntime()
-    const { env } = createLauncher()
+    const { launcher } = createLauncher()
     const definition = startable()
 
-    const first = await startDurableWorkflow(env, definition, { input: { mark: 'x' }, ctx })
-    const once = await startDurableWorkflow(env, definition, {
+    const first = await startDurableWorkflow({
+      launcher,
+      definition: definition,
+      input: { mark: 'x' },
+      ctx,
+    })
+    const once = await startDurableWorkflow({
+      launcher,
+      definition: definition,
       input: { mark: 'x' },
       ctx,
       replayOf: first.runId,
     })
-    const twice = await startDurableWorkflow(env, definition, {
+    const twice = await startDurableWorkflow({
+      launcher,
+      definition: definition,
       input: { mark: 'x' },
       ctx,
       replayOf: first.runId,
@@ -123,9 +162,11 @@ describe('starting a durable workflow', () => {
   // leaves something behind to explain the refusal.
   it('closes the run as failed when the launcher refuses', async () => {
     const { ctx, runs } = createTestRuntime()
-    const { env } = createLauncher({ refusesWith: new Error('the platform is unavailable') })
+    const { launcher } = createLauncher({ refusesWith: new Error('the platform is unavailable') })
 
-    const thrown = await startDurableWorkflow(env, startable(), {
+    const thrown = await startDurableWorkflow({
+      launcher,
+      definition: startable(),
       input: { mark: 'x' },
       ctx,
     }).catch((error: unknown) => error)
@@ -144,9 +185,14 @@ describe('starting a durable workflow', () => {
 describe('the id a durable instance is created under', () => {
   it('is derived from the run', async () => {
     const { ctx } = createTestRuntime()
-    const { env, created } = createLauncher()
+    const { launcher, created } = createLauncher()
 
-    const { runId } = await startDurableWorkflow(env, startable(), { input: { mark: 'x' }, ctx })
+    const { runId } = await startDurableWorkflow({
+      launcher,
+      definition: startable(),
+      input: { mark: 'x' },
+      ctx,
+    })
 
     expect(created[0]?.id).toBe(instanceIdFor('test.startable', runId))
     expect(created[0]?.id).toContain(runId)
@@ -167,10 +213,15 @@ describe('the id a durable instance is created under', () => {
 
   it('gives two runs of one key two ids once the first has released it', async () => {
     const { ctx, runs, journal } = createTestRuntime()
-    const { env, created } = createLauncher()
+    const { launcher, created } = createLauncher()
     const definition = startable()
 
-    const first = await startDurableWorkflow(env, definition, { input: { mark: 'x' }, ctx })
+    const first = await startDurableWorkflow({
+      launcher,
+      definition: definition,
+      input: { mark: 'x' },
+      ctx,
+    })
     await journal.finishRun({
       tenantId: 'tenant_local',
       runId: first.runId,
@@ -178,7 +229,12 @@ describe('the id a durable instance is created under', () => {
       error: 'the instance died',
     })
 
-    const second = await startDurableWorkflow(env, definition, { input: { mark: 'x' }, ctx })
+    const second = await startDurableWorkflow({
+      launcher,
+      definition: definition,
+      input: { mark: 'x' },
+      ctx,
+    })
 
     expect(second.deduplicated).toBe(false)
     expect(runs).toHaveLength(2)
@@ -190,7 +246,7 @@ describe('the id a durable instance is created under', () => {
 
   it('names an unkeyed run the same way a keyed one is named', async () => {
     const { ctx } = createTestRuntime()
-    const { env, created } = createLauncher()
+    const { launcher, created } = createLauncher()
 
     const unkeyed = defineWorkflow(
       { name: 'test.unkeyed', input: markInput, execution: 'durable' },
@@ -199,7 +255,12 @@ describe('the id a durable instance is created under', () => {
       },
     )
 
-    const { runId } = await startDurableWorkflow(env, unkeyed, { input: { mark: 'x' }, ctx })
+    const { runId } = await startDurableWorkflow({
+      launcher,
+      definition: unkeyed,
+      input: { mark: 'x' },
+      ctx,
+    })
 
     expect(created[0]?.id).toBe(instanceIdFor('test.unkeyed', runId))
   })
@@ -209,9 +270,11 @@ describe('the id a durable instance is created under', () => {
   // read as "already under way".
   it('raises a duplicate-instance refusal instead of reading it as success', async () => {
     const { ctx, runs } = createTestRuntime()
-    const { env } = createLauncher({ refusesWith: new Error('instance already exists') })
+    const { launcher } = createLauncher({ refusesWith: new Error('instance already exists') })
 
-    const thrown = await startDurableWorkflow(env, startable(), {
+    const thrown = await startDurableWorkflow({
+      launcher,
+      definition: startable(),
       input: { mark: 'x' },
       ctx,
     }).catch((error: unknown) => error)

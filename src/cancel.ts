@@ -1,3 +1,4 @@
+import { SagaflowError } from './errors'
 import type { RunJournal } from './types'
 
 /**
@@ -5,7 +6,7 @@ import type { RunJournal } from './types'
  * failure: the run is unwound exactly as a failure would be, but it closes `cancelled` and
  * says so, because "somebody changed their mind" and "something broke" are different facts.
  */
-export class WorkflowCancelledError extends Error {
+export class WorkflowCancelledError extends SagaflowError {
   readonly runId: string
 
   constructor(runId: string) {
@@ -26,7 +27,9 @@ export class WorkflowCancelledError extends Error {
  * Answers true only if the run was running. A run that has already ended cannot be stopped,
  * and saying so is more useful than pretending.
  */
-export const requestCancellation = (
-  journal: RunJournal,
-  params: { tenantId: string; runId: string },
-): Promise<boolean> => journal.requestCancellation(params)
+export const requestCancellation = (options: {
+  journal: RunJournal
+  tenantId: string
+  runId: string
+}): Promise<boolean> =>
+  options.journal.requestCancellation({ tenantId: options.tenantId, runId: options.runId })

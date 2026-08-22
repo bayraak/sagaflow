@@ -1,17 +1,21 @@
+import { envelopeId } from './identity'
 import { validateSync } from './schema'
-import type { EventEnvelope, EventSchemaMap, LifecycleEventPayloads } from './types'
-
-export const workflowCompletedEvent = 'workflow.completed'
-export const workflowCompensatedEvent = 'workflow.compensated'
+import type { EventEnvelope, EventSchemaMap, LifecycleEventType } from './types'
 
 /**
- * Facts the engine states about the run itself. A body never has to emit these, and a
- * consumer can rely on seeing exactly one of them per closed run.
+ * Facts the engine states about the run itself, declared once. `LifecycleEventPayloads` in
+ * types.ts is keyed off this object, so a name added here has to be given a payload there and
+ * cannot be added in one place and forgotten in the other.
+ *
+ * A body never emits these — it is refused if it tries — and a consumer can rely on seeing
+ * exactly one of them per closed run.
  */
-export const lifecycleEventTypes: ReadonlyArray<keyof LifecycleEventPayloads> = [
-  workflowCompletedEvent,
-  workflowCompensatedEvent,
-]
+export const lifecycleEvents = {
+  completed: 'workflow.completed',
+  compensated: 'workflow.compensated',
+} as const
+
+export const lifecycleEventTypes: ReadonlyArray<LifecycleEventType> = Object.values(lifecycleEvents)
 
 const isLifecycleEvent = (type: string): boolean =>
   (lifecycleEventTypes as ReadonlyArray<string>).includes(type)
@@ -62,7 +66,7 @@ export const createEnvelope = (options: {
   runId: string
   ordinal: number
 }): EventEnvelope => ({
-  id: `${options.runId}:${options.ordinal}`,
+  id: envelopeId(options.runId, options.ordinal),
   type: options.type,
   payload: options.payload,
   tenantId: options.tenantId,

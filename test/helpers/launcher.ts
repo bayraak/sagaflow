@@ -1,19 +1,17 @@
-import type { DurableWorkflowEnv, DurableWorkflowParams } from '../../src/index'
+import type { DurableWorkflowParams, WorkflowLauncher } from '../../src/index'
 
 export const createLauncher = (options: { refusesWith?: Error } = {}) => {
   const created: { id?: string; params?: DurableWorkflowParams }[] = []
 
-  const env: DurableWorkflowEnv = {
-    WORKFLOWS: {
-      create: async (instance) => {
-        if (options.refusesWith) throw options.refusesWith
+  const launcher: WorkflowLauncher = {
+    create: async (instance) => {
+      if (options.refusesWith) throw options.refusesWith
 
-        created.push(instance)
+      created.push(instance)
 
-        return { id: instance.id ?? 'generated' }
-      },
+      return { id: instance.id ?? 'generated' }
     },
   }
 
-  return { env, created }
+  return { launcher, created }
 }

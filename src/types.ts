@@ -1,3 +1,5 @@
+import type { lifecycleEvents } from './events'
+
 /**
  * The Standard Schema v1 interface, copied inline (MIT, standardschema.dev) so this package
  * depends on no validation library and works with every one that implements the spec — Zod,
@@ -191,13 +193,19 @@ export type RunJournal = {
 export type EventSchemaMap = Record<string, StandardSchemaV1>
 
 /**
+ * The names live in events.ts, so this cannot drift from them: a lifecycle event added there
+ * has to be given a payload here, and one removed there stops compiling here.
+ */
+export type LifecycleEventType = (typeof lifecycleEvents)[keyof typeof lifecycleEvents]
+
+/**
  * Facts about the run itself, emitted by the engine and by nothing else. A workflow that tries
  * to emit one is refused. They are declared here so a consumer can switch on them exhaustively
  * beside its own events.
  */
 export type LifecycleEventPayloads = {
-  'workflow.completed': { runId: string; name: string }
-  'workflow.compensated': {
+  [lifecycleEvents.completed]: { runId: string; name: string }
+  [lifecycleEvents.compensated]: {
     runId: string
     name: string
     error: string
@@ -243,21 +251,27 @@ export type StepContext<Ctx> = Ctx & {
   idempotencyKey: string
 }
 
+/**
+ * A step, as the engine holds it. `run` and `compensate` are declared as methods rather than
+ * function properties so TypeScript checks their parameters bivariantly — which is what lets a
+ * heterogeneous list of steps or definitions be held in one array without every caller reaching
+ * for a cast.
+ */
 export type Step<Ctx, Input, Output, Compensation> = {
   name: string
   config: StepRetryConfig
-  invoke: (
+  run(
     input: Input,
     ctx: StepContext<Ctx>,
-  ) => Promise<{ output: Output; compensateWith?: Compensation }>
-  compensate?: (compensateWith: Compensation, ctx: StepContext<Ctx>) => Promise<void>
+  ): Promise<{ output: Output; compensateWith?: Compensation }>
+  compensate?(compensateWith: Compensation, ctx: StepContext<Ctx>): Promise<void>
 }
 
 export type WorkflowHandle<Ctx> = {
-  step: <Input, Output, Compensation>(
+  step<Input, Output, Compensation>(
     step: Step<Ctx, Input, Output, Compensation>,
     input: Input,
-  ) => Promise<Output>
+  ): Promise<Output>
   emit: EmitFn<EventsOf<Ctx>>
 }
 

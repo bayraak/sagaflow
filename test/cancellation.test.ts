@@ -14,19 +14,18 @@ import { markInput, markStep } from './helpers/steps'
 // Somebody asking for the run to stop, from outside it. Doing it from inside a step is how a
 // suite makes "the request arrived between two steps" happen at a known moment.
 const cancellingStep = (name: string, options: { compensateFails?: boolean } = {}) =>
-  createStep<TestRuntime, { mark: string }, { seen: string }, { undo: string }>(
-    name,
-    async (input, ctx) => {
+  createStep<TestRuntime, { mark: string }, { seen: string }, { undo: string }>(name, {
+    run: async (input, ctx) => {
       ctx.invocations.push(`invoke:${name}`)
-      await requestCancellation(ctx.journal, { tenantId: ctx.tenantId, runId: ctx.runId })
+      await requestCancellation({ journal: ctx.journal, tenantId: ctx.tenantId, runId: ctx.runId })
 
       return { output: { seen: input.mark }, compensateWith: { undo: name } }
     },
-    async (undo, ctx) => {
+    compensate: async (undo, ctx) => {
       ctx.invocations.push(`compensate:${undo.undo}`)
       if (options.compensateFails) throw new Error(`${name} could not be undone`)
     },
-  )
+  })
 
 const cancellable = (options: { compensateFails?: boolean } = {}) =>
   defineWorkflow(
@@ -141,7 +140,7 @@ describe('asking a run to stop', () => {
       input: {},
     })
 
-    expect(await requestCancellation(journal, { tenantId: 'tenant_local', runId })).toBe(true)
+    expect(await requestCancellation({ journal, tenantId: 'tenant_local', runId })).toBe(true)
   })
 
   it('is refused by a run that has already finished', async () => {
@@ -153,7 +152,8 @@ describe('asking a run to stop', () => {
 
     expect(result).toBeUndefined()
     expect(
-      await requestCancellation(harness.journal, {
+      await requestCancellation({
+        journal: harness.journal,
         tenantId: 'tenant_local',
         runId: firstRun(harness.runs).id,
       }),
@@ -164,7 +164,7 @@ describe('asking a run to stop', () => {
     const { journal } = createTestRuntime()
 
     expect(
-      await requestCancellation(journal, { tenantId: 'tenant_local', runId: 'run_nowhere' }),
+      await requestCancellation({ journal, tenantId: 'tenant_local', runId: 'run_nowhere' }),
     ).toBe(false)
   })
 
@@ -179,6 +179,6 @@ describe('asking a run to stop', () => {
       input: {},
     })
 
-    expect(await requestCancellation(journal, { tenantId: 'tenant_other', runId })).toBe(false)
+    expect(await requestCancellation({ journal, tenantId: 'tenant_other', runId })).toBe(false)
   })
 })

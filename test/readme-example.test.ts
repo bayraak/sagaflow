@@ -27,15 +27,14 @@ describe('README: the sixty-second example', () => {
     }
     // ------------------------------------------------------------------------
 
-    const reserveNumber = createStep(
-      'reserve-number',
-      async (_input: { customerId: string }) => {
+    const reserveNumber = createStep('reserve-number', {
+      run: async (_input: { customerId: string }) => {
         const number = await nextInvoiceNumber()
 
         return { output: number, compensateWith: number }
       },
-      async (number) => releaseInvoiceNumber(number),
-    )
+      compensate: async (number) => releaseInvoiceNumber(number),
+    })
 
     const createInvoice = defineWorkflow(
       {
@@ -70,20 +69,21 @@ describe('README: compensation leaves a trail', () => {
     const charged: string[] = []
     const refunded: string[] = []
 
-    const charge = createStep(
-      'charge-card',
-      async (input: { customerId: string; amount: number }, ctx) => {
+    const charge = createStep('charge-card', {
+      run: async (input: { customerId: string; amount: number }, ctx) => {
         charged.push(ctx.idempotencyKey)
 
         return { output: { chargeId: 'ch_1' }, compensateWith: 'ch_1' }
       },
-      async (chargeId) => {
+      compensate: async (chargeId) => {
         refunded.push(chargeId)
       },
-    )
+    })
 
-    const ship = createStep('ship-order', async () => {
-      throw new Error('out of stock')
+    const ship = createStep('ship-order', {
+      run: async () => {
+        throw new Error('out of stock')
+      },
     })
 
     const placeOrder = defineWorkflow(
@@ -126,10 +126,12 @@ describe('README: the same request asked twice', () => {
   it('does the work once and answers the second caller with the first result', async () => {
     let sent = 0
 
-    const send = createStep('send-email', async () => {
-      sent += 1
+    const send = createStep('send-email', {
+      run: async () => {
+        sent += 1
 
-      return { output: { sent: true } }
+        return { output: { sent: true } }
+      },
     })
 
     const sendReceipt = defineWorkflow(
@@ -163,10 +165,12 @@ describe('README: a durable workflow that waits', () => {
   it('sleeps, waits for a signal, and is driven in a test by a fake platform', async () => {
     const reminded: string[] = []
 
-    const remind = createStep('send-reminder', async (input: { invoiceId: string }) => {
-      reminded.push(input.invoiceId)
+    const remind = createStep('send-reminder', {
+      run: async (input: { invoiceId: string }) => {
+        reminded.push(input.invoiceId)
 
-      return { output: { reminded: true } }
+        return { output: { reminded: true } }
+      },
     })
 
     const chase = defineWorkflow(

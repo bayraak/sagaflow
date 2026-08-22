@@ -1,3 +1,4 @@
+import { IdempotencyKeyHeldError } from '../errors'
 import type {
   EventEnvelope,
   EventSink,
@@ -42,13 +43,31 @@ export type MemoryFinishRow = {
 }
 
 /**
+ * The journal, plus the rows it is holding, so a test asserts on what was written rather than
+ * on which function was called.
+ */
+export type MemoryJournal = {
+  journal: RunJournal
+  runs: MemoryRunRow[]
+  steps: MemoryStepRow[]
+  finishes: MemoryFinishRow[]
+  outbox: EventEnvelope[]
+  dispatched: string[]
+  /**
+   * Make every outbox write fail from here on, so a suite can prove that a finish which cannot
+   * queue its events does not close the run either.
+   */
+  breakOutboxWrites: () => void
+}
+
+/**
  * The journal a test reaches for, and the worked reference for writing your own: rows in
  * arrays, and the one invariant a real table has to enforce — a single claim per
  * (tenant, idempotency key) — enforced here too, so a suite exercises the engine's behaviour
  * rather than a fixture's convenience.
  */
-export const createMemoryJournal = (options: { now?: () => number } = {}) => {
-  const now = options.now ?? (() => Date.now())
+export const createMemoryJournal = (options: { now?: () => number } = {}): MemoryJournal => {
+  const now = options.now ?? ((): number => Date.now())
   let outboxWritesFail = false
   const runs: MemoryRunRow[] = []
   const steps: MemoryStepRow[] = []
@@ -60,10 +79,10 @@ export const createMemoryJournal = (options: { now?: () => number } = {}) => {
   // A run that failed, compensated or was cancelled RELEASES its key, because the work it was
   // asked to do did not happen and asking again is the only way to get it done. A table
   // enforces the same rule with a partial unique index; see src/d1/schema.sql.
-  const runOf = (tenantId: string, runId: string) =>
+  const runOf = (tenantId: string, runId: string): MemoryRunRow | undefined =>
     runs.find((run) => run.tenantId === tenantId && run.id === runId)
 
-  const heldRun = (tenantId: string, idempotencyKey: string) =>
+  const heldRun = (tenantId: string, idempotencyKey: string): MemoryRunRow | undefined =>
     runs.find(
       (run) =>
         run.tenantId === tenantId &&
@@ -76,7 +95,12 @@ export const createMemoryJournal = (options: { now?: () => number } = {}) => {
       const claimed =
         params.idempotencyKey !== null && heldRun(params.tenantId, params.idempotencyKey)
 
-      if (claimed) throw new Error('the idempotency key is already held')
+      if (claimed) {
+        throw new IdempotencyKeyHeldError({
+          tenantId: params.tenantId,
+          idempotencyKey: params.idempotencyKey as string,
+        })
+      }
 
       const id = `run_${runs.length + 1}`
       runs.push({
@@ -180,21 +204,25 @@ export const createMemoryJournal = (options: { now?: () => number } = {}) => {
     finishes,
     outbox,
     dispatched,
-    /**
-     * Make every outbox write fail from here on, so a suite can prove that a finish which
-     * cannot queue its events does not close the run either.
-     */
-    breakOutboxWrites: () => {
+    breakOutboxWrites: (): void => {
       outboxWritesFail = true
     },
   }
 }
 
+export type MemorySink = {
+  sink: EventSink
+  /** Every message that travelled, flattened. */
+  sent: EventEnvelope[]
+  /** One entry per `sendBatch` call, so a suite can ask how many calls a drain made. */
+  batches: EventEnvelope[][]
+}
+
 /**
- * One entry per `sendBatch` call, so a suite can ask how many calls a drain made as well as
- * what travelled in them.
+ * A sink that remembers. One entry per `sendBatch` call, so a suite can ask how many calls a
+ * drain made as well as what travelled in them.
  */
-export const createMemorySink = (options: { refuses?: boolean } = {}) => {
+export const createMemorySink = (options: { refuses?: boolean } = {}): MemorySink => {
   const sent: EventEnvelope[] = []
   const batches: EventEnvelope[][] = []
 

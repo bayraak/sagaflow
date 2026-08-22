@@ -1,3 +1,4 @@
+import { IdempotencyKeyHeldError } from '../errors'
 import type { EventEnvelope, RunJournal, RunStatus } from '../types'
 import { assertIs, assertRefuses, assertSame, assertThat } from './assert'
 
@@ -56,9 +57,12 @@ const envelopeOf = (params: {
 export const journalConformance = (
   createSubject: () => JournalSubject | Promise<JournalSubject>,
 ): ConformanceCase[] => {
-  const withSubject = (name: string, body: (subject: JournalSubject) => Promise<void>) => ({
+  const withSubject = (
+    name: string,
+    body: (subject: JournalSubject) => Promise<void>,
+  ): ConformanceCase => ({
     name,
-    run: async () => {
+    run: async (): Promise<void> => {
       await body(await createSubject())
     },
   })
@@ -70,7 +74,7 @@ export const journalConformance = (
       idempotencyKey?: string | null
       execution?: 'durable' | 'inline'
     } = {},
-  ) =>
+  ): Promise<string> =>
     journal.insertRun({
       tenantId: params.tenantId ?? tenant,
       name: 'conformance.workflow',
@@ -79,7 +83,12 @@ export const journalConformance = (
       input: { asked: true },
     })
 
-  const closeRun = (journal: RunJournal, runId: string, status: RunStatus, output?: unknown) =>
+  const closeRun = (
+    journal: RunJournal,
+    runId: string,
+    status: RunStatus,
+    output?: unknown,
+  ): Promise<void> =>
     journal.finishRun({
       tenantId: tenant,
       runId,
@@ -115,6 +124,28 @@ export const journalConformance = (
       await assertRefuses(
         () => openRun(journal, { idempotencyKey: 'key-a' }),
         'a key held by a running run must be refused',
+      )
+    }),
+
+    // Named rather than merely thrown. Every store words a uniqueness violation differently,
+    // and an engine that had to match on the wording would be wrong on the next store somebody
+    // brings. A typed refusal lets it tell "this key is taken" apart from "the database is on
+    // fire" — and tell them apart safely enough to retry the one that is worth retrying.
+    withSubject('insertRun names its refusal', async ({ journal }) => {
+      await openRun(journal, { idempotencyKey: 'key-named' })
+
+      const thrown = await openRun(journal, { idempotencyKey: 'key-named' }).catch(
+        (error: unknown) => error,
+      )
+
+      assertThat(
+        thrown instanceof IdempotencyKeyHeldError,
+        'a held key must be refused with IdempotencyKeyHeldError',
+      )
+      assertIs(
+        (thrown as IdempotencyKeyHeldError).idempotencyKey,
+        'key-named',
+        'the refusal names the key',
       )
     }),
 

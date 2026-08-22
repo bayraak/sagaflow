@@ -24,7 +24,7 @@ export type SqliteDatabase = {
  * or neither happened.
  */
 export const createSqliteDriver = (db: SqliteDatabase): SqlDriver => {
-  const execute = (sql: string) => db.prepare(sql).run()
+  const execute = (sql: string): { changes: bigint | number } => db.prepare(sql).run()
 
   return {
     run: async ({ sql, params }) => {

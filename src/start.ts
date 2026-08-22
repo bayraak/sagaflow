@@ -1,14 +1,15 @@
+import { claimRun } from './claim'
 import type { DurableWorkflow } from './define'
 import { messageOf } from './errors'
 import { validate } from './schema'
-import type { DurableWorkflowEnv, StandardSchemaV1, WorkflowRuntime } from './types'
+import type { StandardSchemaV1, WorkflowLauncher, WorkflowRuntime } from './types'
 
 const instanceIdPrefix = 'wf-'
 const instanceIdLimit = 100
 
 // Underscores survive because the platforms allow them and because a run id is far more
 // useful when it is the run id verbatim.
-const readable = (value: string) => value.replaceAll(/[^a-zA-Z0-9_]+/g, '-')
+const readable = (value: string): string => value.replaceAll(/[^a-zA-Z0-9_]+/g, '-')
 
 /**
  * The id a durable instance is created under: the workflow's name, made legal, and the run it
@@ -39,12 +40,20 @@ export const startDurableWorkflow = async <
   Ctx extends WorkflowRuntime,
   Input extends StandardSchemaV1,
   Output,
->(
-  env: DurableWorkflowEnv,
-  definition: DurableWorkflow<Ctx, Input, Output>,
-  options: { input: unknown; ctx: Ctx; replayOf?: string; parentRunId?: string | null },
-): Promise<{ runId: string; deduplicated: boolean }> => {
-  const { ctx } = options
+>(options: {
+  /**
+   * The binding itself, not an environment that happens to hold one under a fixed key. A worker
+   * may have several workflow bindings, and which one a definition belongs on is the caller's
+   * business rather than a naming convention this package imposes.
+   */
+  launcher: WorkflowLauncher
+  definition: DurableWorkflow<Ctx, Input, Output>
+  input: unknown
+  ctx: Ctx
+  replayOf?: string
+  parentRunId?: string | null
+}): Promise<{ runId: string; deduplicated: boolean }> => {
+  const { ctx, definition } = options
   const parsed = await validate(definition.input, options.input, `the input of ${definition.name}`)
 
   /*
@@ -64,32 +73,29 @@ export const startDurableWorkflow = async <
         : null
       : `replay:${options.replayOf}`
 
-  let runId: string
-  try {
-    runId = await ctx.journal.insertRun({
-      tenantId: ctx.tenantId,
-      name: definition.name,
-      execution: 'durable',
-      idempotencyKey,
-      input: parsed,
-      parentRunId: options.parentRunId ?? null,
-      ...(options.replayOf === undefined ? {} : { replayOf: options.replayOf }),
-    })
-  } catch (error) {
-    // The journal refused the key, so this work is already under way or already done.
-    if (idempotencyKey === null) throw error
+  const claim = await claimRun({
+    journal: ctx.journal,
+    tenantId: ctx.tenantId,
+    idempotencyKey,
+    insert: () =>
+      ctx.journal.insertRun({
+        tenantId: ctx.tenantId,
+        name: definition.name,
+        execution: 'durable',
+        idempotencyKey,
+        input: parsed,
+        parentRunId: options.parentRunId ?? null,
+        ...(options.replayOf === undefined ? {} : { replayOf: options.replayOf }),
+      }),
+  })
 
-    const existing = await ctx.journal.findRunByIdempotencyKey({
-      tenantId: ctx.tenantId,
-      idempotencyKey,
-    })
-    if (!existing) throw error
+  // Already under way, or already done. Answer with the run that is doing it.
+  if (!claim.claimed) return { runId: claim.runId, deduplicated: true }
 
-    return { runId: existing.id, deduplicated: true }
-  }
+  const { runId } = claim
 
   try {
-    await env.WORKFLOWS.create({
+    await options.launcher.create({
       id: instanceIdFor(definition.name, runId),
       params: {
         name: definition.name,

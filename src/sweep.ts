@@ -15,11 +15,12 @@ import type { RunJournal } from './types'
  * Answers how many runs it closed. Run it on a schedule with a window comfortably longer than
  * your longest inline request.
  */
-export const sweepAbandonedRuns = (
-  journal: RunJournal,
-  options: { now?: number; olderThanMs: number },
-): Promise<number> =>
-  journal.failAbandonedRuns({
+export const sweepAbandonedRuns = (options: {
+  journal: RunJournal
+  now?: number
+  olderThanMs: number
+}): Promise<number> =>
+  options.journal.failAbandonedRuns({
     execution: 'inline',
     startedBefore: (options.now ?? Date.now()) - options.olderThanMs,
     error: `abandoned: no finish after ${options.olderThanMs}ms`,

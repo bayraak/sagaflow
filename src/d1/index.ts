@@ -11,7 +11,7 @@ import type { RunJournal } from '../types'
  * batch rather than a transaction: the shape it needs is the shape this platform actually has.
  */
 export const createD1Driver = (db: D1Database): SqlDriver => {
-  const prepare = ({ sql, params }: { sql: string; params: unknown[] }) =>
+  const prepare = ({ sql, params }: { sql: string; params: unknown[] }): D1PreparedStatement =>
     params.length === 0 ? db.prepare(sql) : db.prepare(sql).bind(...params)
 
   return {

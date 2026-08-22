@@ -3,7 +3,7 @@ import { describe, expect, it } from 'bun:test'
 import { createStep, namedStep, reservedStepNames } from '../src/index'
 
 const anyStep = (name: string) =>
-  createStep<unknown, void, void>(name, async () => ({ output: undefined }))
+  createStep<unknown, void, void>(name, { run: async () => ({ output: undefined }) })
 
 // The engine runs steps of its own — the finish and the drain — and names every compensation
 // after the step it reverses. A caller's step under one of those names would be handed the
@@ -12,7 +12,7 @@ const anyStep = (name: string) =>
 // line that caused it.
 describe('the names the engine keeps for itself', () => {
   it('refuses a step named after one of them', () => {
-    for (const reserved of reservedStepNames) {
+    for (const reserved of Object.values(reservedStepNames)) {
       expect(() => anyStep(reserved)).toThrow(`"${reserved}" is a reserved step name`)
     }
   })
@@ -20,7 +20,7 @@ describe('the names the engine keeps for itself', () => {
   it('refuses a step borrowed under one of them', () => {
     const step = anyStep('honest')
 
-    for (const reserved of reservedStepNames) {
+    for (const reserved of Object.values(reservedStepNames)) {
       expect(() => namedStep(step, reserved)).toThrow('reserved')
     }
   })

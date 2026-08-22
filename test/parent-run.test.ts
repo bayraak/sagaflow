@@ -29,10 +29,12 @@ describe('a run started from inside another run', () => {
 
     const startsAChild = createStep<TestRuntime, { mark: string }, { childRunId: string }>(
       'start-child',
-      async (input, ctx) => {
-        const started = await child.run({ input, ctx, parentRunId: ctx.runId })
+      {
+        run: async (input, ctx) => {
+          const started = await child.run({ input, ctx, parentRunId: ctx.runId })
 
-        return { output: { childRunId: started.runId } }
+          return { output: { childRunId: started.runId } }
+        },
       },
     )
 
@@ -60,7 +62,7 @@ describe('a run started from inside another run', () => {
 
   it('records it for a durable run too', async () => {
     const harness = createTestRuntime()
-    const { env } = createLauncher()
+    const { launcher } = createLauncher()
 
     const durableChild = defineWorkflow(
       { name: 'test.durable-child', input: markInput, execution: 'durable' },
@@ -69,7 +71,9 @@ describe('a run started from inside another run', () => {
       },
     )
 
-    await startDurableWorkflow(env, durableChild, {
+    await startDurableWorkflow({
+      launcher,
+      definition: durableChild,
       input: { mark: 'x' },
       ctx: harness.ctx,
       parentRunId: 'run_parent',

@@ -6,22 +6,21 @@ const edgeStep = (
   name: string,
   options: { compensateFails?: boolean; emitsWhileUndoing?: boolean; fails?: boolean } = {},
 ) =>
-  createStep<TestRuntime, MarkInput, MarkOutput, MarkUndo>(
-    name,
-    async (input, ctx) => {
+  createStep<TestRuntime, MarkInput, MarkOutput, MarkUndo>(name, {
+    run: async (input, ctx) => {
       ctx.invocations.push(`invoke:${name}`)
       if (options.fails) throw new Error(`${name} refused`)
 
       return { output: { seen: `${name}:${input.mark}` }, compensateWith: { undo: name } }
     },
-    async (undo, ctx) => {
+    compensate: async (undo, ctx) => {
       ctx.invocations.push(`compensate:${undo.undo}`)
       if (options.emitsWhileUndoing) {
         ctx.emit('invoice.issued', { invoiceId: `undone-${undo.undo}`, total: 0 })
       }
       if (options.compensateFails) throw new Error(`${name} could not be undone`)
     },
-  )
+  })
 
 // Three steps, the last one refusing, so every suite that uses this starts from a run that has
 // real work to undo.

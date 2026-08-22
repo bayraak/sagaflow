@@ -6,27 +6,25 @@ import { markInput } from './helpers/steps'
 
 const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-const late = createStep<TestRuntime, { mark: string }, { seen: string }, { undo: string }>(
-  'late',
-  async (input, ctx) => {
+const late = createStep<TestRuntime, { mark: string }, { seen: string }, { undo: string }>('late', {
+  run: async (input, ctx) => {
     await settle(5)
     ctx.invocations.push('invoke:late')
 
     return { output: { seen: input.mark }, compensateWith: { undo: 'late' } }
   },
-  async (undo, ctx) => {
+  compensate: async (undo, ctx) => {
     ctx.invocations.push(`compensate:${undo.undo}`)
   },
-)
+})
 
-const early = createStep<TestRuntime, { mark: string }, { seen: string }, never>(
-  'early',
-  async (_input, ctx) => {
+const early = createStep<TestRuntime, { mark: string }, { seen: string }, never>('early', {
+  run: async (_input, ctx) => {
     ctx.invocations.push('invoke:early')
 
     throw new Error('early refused')
   },
-)
+})
 
 // Promise.all rejects the moment the first of them does, while the others are still running.
 // If the engine started unwinding there and then, a step that finished a millisecond later

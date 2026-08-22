@@ -1,3 +1,4 @@
+import { IdempotencyKeyHeldError } from '../errors'
 import type { EventEnvelope, RunJournal, RunOutcome, RunStatus, WorkflowExecution } from '../types'
 import type { SqlDriver } from './driver'
 
@@ -23,9 +24,10 @@ const heldStatuses = "('running', 'completed')"
 
 const asStatus = (value: string): RunStatus => value as RunStatus
 
-const identity = () => crypto.randomUUID()
+const identity = (): string => crypto.randomUUID()
 
-const encode = (value: unknown) => (value === undefined ? null : JSON.stringify(value))
+const encode = (value: unknown): string | null =>
+  value === undefined ? null : JSON.stringify(value)
 
 /**
  * The journal, in SQL, over whatever already talks to your database.
@@ -41,31 +43,56 @@ export const createSqlJournal = (
   options: { tables?: Partial<SqlTableNames>; now?: () => number } = {},
 ): RunJournal => {
   const tables = { ...defaultTableNames, ...options.tables }
-  const now = options.now ?? (() => Date.now())
+  const now = options.now ?? ((): number => Date.now())
 
   return {
     insertRun: async (params) => {
       const id = identity()
 
-      // No conflict clause on purpose: the index refusing this insert IS how the engine learns
-      // that the key is held, and swallowing it would turn a duplicate into a silent no-op.
-      await driver.run({
-        sql: `insert into ${tables.runs}
-                (id, tenant_id, name, execution, status, idempotency_key, replay_of,
-                 parent_run_id, input, cancel_requested, started_at)
-              values (?, ?, ?, ?, 'running', ?, ?, ?, ?, 0, ?)`,
-        params: [
-          id,
-          params.tenantId,
-          params.name,
-          params.execution,
-          params.idempotencyKey,
-          params.replayOf ?? null,
-          params.parentRunId ?? null,
-          JSON.stringify(params.input),
-          now(),
-        ],
-      })
+      try {
+        // No conflict clause on purpose: the index refusing this insert IS how the engine
+        // learns that the key is held, and swallowing it would turn a duplicate into a silent
+        // no-op.
+        await driver.run({
+          sql: `insert into ${tables.runs}
+                  (id, tenant_id, name, execution, status, idempotency_key, replay_of,
+                   parent_run_id, input, cancel_requested, started_at)
+                values (?, ?, ?, ?, 'running', ?, ?, ?, ?, 0, ?)`,
+          params: [
+            id,
+            params.tenantId,
+            params.name,
+            params.execution,
+            params.idempotencyKey,
+            params.replayOf ?? null,
+            params.parentRunId ?? null,
+            JSON.stringify(params.input),
+            now(),
+          ],
+        })
+      } catch (error) {
+        /*
+         * Every driver words a uniqueness violation differently, and matching on the wording is
+         * how you end up with a regex that is wrong on the database you have not tried yet. So
+         * the refusal is not interpreted: the journal asks whether the key is held and names
+         * the answer. One extra round trip, on a path that only runs after something was
+         * already refused.
+         */
+        if (params.idempotencyKey === null) throw error
+
+        const holder = await driver.all<{ id: string }>({
+          sql: `select id from ${tables.runs}
+                where tenant_id = ? and idempotency_key = ? and status in ${heldStatuses}
+                limit 1`,
+          params: [params.tenantId, params.idempotencyKey],
+        })
+        if (holder.length === 0) throw error
+
+        throw new IdempotencyKeyHeldError({
+          tenantId: params.tenantId,
+          idempotencyKey: params.idempotencyKey,
+        })
+      }
 
       return id
     },

@@ -13,14 +13,20 @@ import { markInput, markStep } from './helpers/steps'
 
 const cancelling = createStep<TestRuntime, { mark: string }, { seen: string }, { undo: string }>(
   'first',
-  async (input, ctx) => {
-    ctx.invocations.push('invoke:first')
-    await requestCancellation(ctx.journal, { tenantId: ctx.tenantId, runId: ctx.runId })
+  {
+    run: async (input, ctx) => {
+      ctx.invocations.push('invoke:first')
+      await requestCancellation({
+        journal: ctx.journal,
+        tenantId: ctx.tenantId,
+        runId: ctx.runId,
+      })
 
-    return { output: { seen: input.mark }, compensateWith: { undo: 'first' } }
-  },
-  async (undo, ctx) => {
-    ctx.invocations.push(`compensate:${undo.undo}`)
+      return { output: { seen: input.mark }, compensateWith: { undo: 'first' } }
+    },
+    compensate: async (undo, ctx) => {
+      ctx.invocations.push(`compensate:${undo.undo}`)
+    },
   },
 )
 

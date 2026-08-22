@@ -5,14 +5,24 @@ export {
   type InlineWorkflow,
 } from './define'
 export { requestCancellation, WorkflowCancelledError } from './cancel'
+export { claimRun, type RunClaim } from './claim'
+export { compensationIdempotencyKey, envelopeId, stepIdempotencyKey } from './identity'
 export { executeDurable } from './durable'
 export { executeRun, type StepRunner } from './engine'
-export { messageOf, WorkflowError } from './errors'
-export { lifecycleEventTypes, workflowCompensatedEvent, workflowCompletedEvent } from './events'
+export { IdempotencyKeyHeldError, messageOf, SagaflowError, WorkflowError } from './errors'
+export { lifecycleEvents, lifecycleEventTypes } from './events'
 export { dispatchEvents, eventBatchLimit, eventSweepLimit, sweepEventOutbox } from './outbox'
 export { createDurableRegistry, registerDurableWorkflow, type RegisteredWorkflow } from './registry'
 export { SchemaError } from './schema'
-export { createStep, defaultStepConfig, namedStep, reservedStepNames } from './step'
+export {
+  compensationStepName,
+  createStep,
+  defaultStepConfig,
+  namedStep,
+  reservedStepNames,
+  type StepBudget,
+  type StepOptions,
+} from './step'
 export { sweepAbandonedRuns } from './sweep'
 export { instanceIdFor, startDurableWorkflow } from './start'
 export type {
@@ -27,6 +37,7 @@ export type {
   EventsOf,
   InlineRunResult,
   LifecycleEventPayloads,
+  LifecycleEventType,
   RunJournal,
   RunOutcome,
   RunStatus,

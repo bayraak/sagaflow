@@ -1,15 +1,10 @@
 import { WorkflowCancelledError } from './cancel'
 import { messageOf, WorkflowError } from './errors'
-import {
-  createEnvelope,
-  validateEmission,
-  workflowCompensatedEvent,
-  workflowCompletedEvent,
-  type RawEvent,
-} from './events'
+import { createEnvelope, lifecycleEvents, validateEmission, type RawEvent } from './events'
+import { compensationIdempotencyKey, stepIdempotencyKey } from './identity'
 import { dispatchEvents } from './outbox'
 import { validate } from './schema'
-import { defaultStepConfig } from './step'
+import { compensationStepName, defaultStepConfig, reservedStepNames } from './step'
 import type {
   CompensationOutcome,
   Step,
@@ -62,7 +57,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
    * lets the second write land on rows that already exist instead of handing the consumer
    * copies it has no way to recognise.
    */
-  const envelopeFor = (event: RawEvent) => {
+  const envelopeFor = (event: RawEvent): EventEnvelope => {
     const envelope = createEnvelope({
       type: event.type,
       payload: event.payload,
@@ -76,15 +71,17 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     return envelope
   }
 
-  const mint = (event: RawEvent) => {
+  const mint = (event: RawEvent): void => {
     held.push(envelopeFor(event))
   }
 
   // A body emits into the run directly; a step emits into its own result. Validation happens
   // where the caller can still be told about it — at the emit, not at the mint.
-  const emitInto = (collect: (event: RawEvent) => void) => (type: string, payload: unknown) => {
-    collect({ type, payload: validateEmission(ctx.eventSchemas, type, payload) })
-  }
+  const emitInto =
+    (collect: (event: RawEvent) => void) =>
+    (type: string, payload: unknown): void => {
+      collect({ type, payload: validateEmission(ctx.eventSchemas, type, payload) })
+    }
 
   // The emit a body and a step are handed is one plain function; the overloads it is exposed
   // through are what make the caller's event names and payloads line up, and they cannot be
@@ -141,9 +138,9 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
       const emitted: RawEvent[] = []
 
       try {
-        const produced = await step.invoke(
+        const produced = await step.run(
           input,
-          contextFor(`${runId}:${current}`, (event) => emitted.push(event)),
+          contextFor(stepIdempotencyKey(runId, current), (event) => emitted.push(event)),
         )
         const recorded = await ctx.journal.recordStep({
           tenantId: ctx.tenantId,
@@ -188,7 +185,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
         run: () =>
           compensate(
             compensateWith,
-            contextFor(`${runId}:${current}:undo`, () => undefined),
+            contextFor(compensationIdempotencyKey(runId, current), () => undefined),
           ),
       })
     }
@@ -244,14 +241,14 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
       seq += 1
 
       try {
-        await runner(`compensate:${undo.name}`, undo.config, async ({ attempt }) => {
+        await runner(compensationStepName(undo.name), undo.config, async ({ attempt }) => {
           try {
             await undo.run()
             await ctx.journal.recordStep({
               tenantId: ctx.tenantId,
               runId,
               seq: current,
-              name: `compensate:${undo.name}`,
+              name: compensationStepName(undo.name),
               status: 'compensated',
               attempt,
             })
@@ -260,7 +257,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
               tenantId: ctx.tenantId,
               runId,
               seq: current,
-              name: `compensate:${undo.name}`,
+              name: compensationStepName(undo.name),
               status: 'failed',
               attempt,
               error: messageOf(error),
@@ -317,11 +314,11 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
      * is not worth a queue call on the way out of a failure, and the sweeper carries it.
      */
     const announcement = envelopeFor({
-      type: workflowCompensatedEvent,
+      type: lifecycleEvents.compensated,
       payload: { runId, name, error: messageOf(error), outcome },
     })
 
-    await runner('finish-run', defaultStepConfig, () =>
+    await runner(reservedStepNames.finishRun, defaultStepConfig, () =>
       ctx.journal.finishRun({
         tenantId: ctx.tenantId,
         runId,
@@ -340,7 +337,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     })
   }
 
-  mint({ type: workflowCompletedEvent, payload: { runId, name } })
+  mint({ type: lifecycleEvents.completed, payload: { runId, name } })
 
   /*
    * The run closes and its events are written down in ONE atomic batch, so a completed run
@@ -351,7 +348,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
    * checkpoints it: an instance invoked again for the same run finds the finish already done
    * and does not close the run twice.
    */
-  await runner('finish-run', defaultStepConfig, () =>
+  await runner(reservedStepNames.finishRun, defaultStepConfig, () =>
     ctx.journal.finishRun({
       tenantId: ctx.tenantId,
       runId,
@@ -367,7 +364,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     // problem: its mutation committed, the events are on the table waiting, and the sweeper
     // carries them. Answering a committed mutation with an error because a queue was down is
     // exactly what the outbox exists to stop, so nothing here is allowed to throw.
-    await runner('emit-events', defaultStepConfig, () =>
+    await runner(reservedStepNames.emitEvents, defaultStepConfig, () =>
       dispatchEvents({
         sink,
         envelopes: held,

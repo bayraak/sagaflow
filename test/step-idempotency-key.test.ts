@@ -16,9 +16,8 @@ import { markInput } from './helpers/steps'
 // accepted the charge, the acknowledgement was lost, the step is retried — and without a key
 // that is stable across attempts, the customer is charged twice.
 const keyReportingStep = (name: string, options: { failsUntilAttempt?: number } = {}) =>
-  createStep<TestRuntime, { mark: string }, { key: string }, { key: string }>(
-    name,
-    async (_input, ctx) => {
+  createStep<TestRuntime, { mark: string }, { key: string }, { key: string }>(name, {
+    run: async (_input, ctx) => {
       ctx.invocations.push(`invoke:${name}:${ctx.idempotencyKey}`)
       if (options.failsUntilAttempt !== undefined) {
         const seen = ctx.invocations.filter((entry) => entry.startsWith(`invoke:${name}:`)).length
@@ -27,10 +26,10 @@ const keyReportingStep = (name: string, options: { failsUntilAttempt?: number } 
 
       return { output: { key: ctx.idempotencyKey }, compensateWith: { key: ctx.idempotencyKey } }
     },
-    async (_undo, ctx) => {
+    compensate: async (_undo, ctx) => {
       ctx.invocations.push(`compensate:${name}:${ctx.idempotencyKey}`)
     },
-  )
+  })
 
 describe('every step context carries a key stable enough to hand a provider', () => {
   it('gives two attempts of one step the same key', async () => {

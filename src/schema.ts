@@ -1,3 +1,4 @@
+import { SagaflowError } from './errors'
 import type { StandardSchemaV1 } from './types'
 
 const describePath = (issue: StandardSchemaV1.Issue): string => {
@@ -18,7 +19,7 @@ const describePath = (issue: StandardSchemaV1.Issue): string => {
  * What a refused value throws. It carries the issues as the schema reported them, because the
  * caller that has to fix the value needs the path and not just "invalid".
  */
-export class SchemaError extends Error {
+export class SchemaError extends SagaflowError {
   readonly issues: ReadonlyArray<StandardSchemaV1.Issue>
 
   constructor(subject: string, issues: ReadonlyArray<StandardSchemaV1.Issue>) {

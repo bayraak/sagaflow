@@ -6,7 +6,7 @@ import {
   namedStep,
   WorkflowError,
   type DurableWorkflowHandle,
-  type StepRetryConfig,
+  type StepBudget,
   type WorkflowHandle,
 } from '../src/index'
 import { createFakePrimitive } from './helpers/primitive'
@@ -32,7 +32,7 @@ const twiceOverWorkflow = defineWorkflow(
 // written for a step that talks to somebody else's service; borrowed into a fan-out where the
 // common failure is permanent, waiting a minute per item to learn what the first attempt
 // already knew is the cost of not saying so.
-const borrowedBudget: StepRetryConfig = { retries: { limit: 1, delay: '1 second' } }
+const borrowedBudget: StepBudget = { retries: { limit: 1, delay: '1 second' } }
 
 describe('one step, used more than once in a run', () => {
   it('is recorded under two names', async () => {

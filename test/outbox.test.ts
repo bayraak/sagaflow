@@ -13,16 +13,15 @@ import { createTestRuntime, firstFinish, type TestRuntime } from './helpers/runt
 import { markInput } from './helpers/steps'
 
 const writeStep = (options: { fails?: boolean } = {}) =>
-  createStep<TestRuntime, { mark: string }, { seen: string }, { undo: string }>(
-    'write',
-    async (input, ctx) => {
+  createStep<TestRuntime, { mark: string }, { seen: string }, { undo: string }>('write', {
+    run: async (input, ctx) => {
       ctx.emit('invoice.issued', { invoiceId: input.mark, total: 1 })
       if (options.fails) throw new Error('write refused')
 
       return { output: { seen: input.mark }, compensateWith: { undo: input.mark } }
     },
-    async () => undefined,
-  )
+    compensate: async () => undefined,
+  })
 
 const savingWorkflow = (options: { fails?: boolean } = {}) =>
   defineWorkflow(
