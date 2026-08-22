@@ -77,6 +77,29 @@ export type Flow<Events extends EventSchemaMap = EventSchemaMap> = {
   ): Promise<{ runId: string; deduplicated: boolean }>
 }
 
+const developmentObserver = (): RunObserver => {
+  const trails = new Map<string, string[]>()
+  const mark = (runId: string, note: string): void => {
+    trails.set(runId, [...(trails.get(runId) ?? []), note])
+  }
+
+  return {
+    onStepEnd: (fact) =>
+      mark(fact.runId, `${fact.name} ${fact.status === 'completed' ? '✓' : '✗'}`),
+    onCompensationEnd: (fact) =>
+      mark(fact.runId, `undo ${fact.name} ${fact.status === 'compensated' ? '✓' : '✗'}`),
+    onRunEnd: (fact) => {
+      const trail = trails.get(fact.runId) ?? []
+      trails.delete(fact.runId)
+
+      console.info(
+        `[sagaflow] ${fact.name} · ${fact.runId} · ${fact.status} ${fact.durationMs}ms` +
+          (trail.length > 0 ? ` · ${trail.join(' ')}` : ''),
+      )
+    },
+  }
+}
+
 const notDurable =
   'sagaflow is running with no journal, so its state is in memory and not durable. ' +
   'Everything is lost when this process exits and nothing is shared between processes. ' +
@@ -112,15 +135,9 @@ export const sagaflow: {
           console.info(`[sagaflow] ${envelope.type}`, envelope.payload)
         })
       : undefined)
-  const observer =
-    config.observer ??
-    (ephemeral
-      ? {
-          onRunEnd: (fact: { name: string; status: string; durationMs: number }): void => {
-            console.info(`[sagaflow] ${fact.name} ${fact.status} in ${fact.durationMs}ms`)
-          },
-        }
-      : undefined)
+  // One line per run, and only when nobody brought their own observer. A development log that
+  // says what happened in the order it happened beats five that say a fragment each.
+  const observer = config.observer ?? (ephemeral ? developmentObserver() : undefined)
 
   const byName = new Map((config.sagas ?? []).map((declared) => [declared.name, declared]))
 

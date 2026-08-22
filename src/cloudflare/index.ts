@@ -5,10 +5,21 @@
  * Importing this module pulls in `cloudflare:workers`, so it only resolves inside a Worker.
  * Everything else in the package runs anywhere.
  */
-export { createWorkflowEntrypoint, type WorkflowEntrypointClass } from './entrypoint.js'
+export {
+  createWorkflowEntrypoint,
+  entrypointFor,
+  type WorkflowEntrypointClass,
+} from './entrypoint.js'
 export {
   sendWorkflowEvent,
   type WorkflowInstanceHandle,
   type WorkflowInstanceLookup,
 } from './send-event.js'
 export { createStepPrimitive } from './step-primitive.js'
+export {
+  handleQueue,
+  handleScheduled,
+  workerFor,
+  type QueueOptions,
+  type SweepOptions,
+} from './worker.js'

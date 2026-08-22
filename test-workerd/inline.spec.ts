@@ -40,9 +40,8 @@ describe('an inline run inside a worker', () => {
 
   it('writes its row, its run, its steps and its events', async () => {
     const response = await SELF.fetch('https://sagaflow.test/inline?mark=THING-1')
-    const body = (await response.json()) as { runId: string; deduplicated: boolean }
-
-    expect(body.deduplicated).toBe(false)
+    const { id } = (await response.json()) as { id: string }
+    const body = { runId: id.split(':')[0] as string }
 
     const run = await first<{ status: string; execution: string; tenant_id: string }>(
       'select status, execution, tenant_id from saga_runs where id = ?',
@@ -80,7 +79,8 @@ describe('an inline run inside a worker', () => {
    */
   it('delivers what it drained to a consumer that can read it', async () => {
     const response = await SELF.fetch('https://sagaflow.test/inline?mark=THING-2')
-    const body = (await response.json()) as { runId: string }
+    const { id } = (await response.json()) as { id: string }
+    const body = { runId: id.split(':')[0] as string }
 
     const drained = await all<{ payload: string }>(
       'select payload from saga_outbox where run_id = ? order by id',
@@ -97,7 +97,7 @@ describe('an inline run inside a worker', () => {
       })),
     )
     const context = createExecutionContext()
-    await worker.queue(batch, bindings)
+    await worker.queue(batch as unknown as Parameters<typeof worker.queue>[0])
     const result = await getQueueResult(batch, context)
 
     expect(result.explicitAcks).toHaveLength(2)

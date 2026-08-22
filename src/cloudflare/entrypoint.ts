@@ -2,12 +2,14 @@
 
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 
+import type { Flow } from '../flow.js'
 import {
   createDurableRegistry,
   type RegisteredWorkflow,
   type RegistrableWorkflow,
 } from '../registry.js'
-import type { DurableWorkflowParams, WorkflowRuntime } from '../types.js'
+import { definitionOf } from '../saga.js'
+import type { DurableWorkflowParams, EventSchemaMap, WorkflowRuntime } from '../types.js'
 import { createStepPrimitive } from './step-primitive.js'
 
 export type WorkflowEntrypointClass<Env> = new (
@@ -66,3 +68,23 @@ export const createWorkflowEntrypoint = <Env, Ctx extends WorkflowRuntime>(
     }
   }
 }
+
+/**
+ * The entrypoint class, from an instance.
+ *
+ * The registry and the runtime both come from the instance, so a worker's whole durable wiring
+ * is one line. Cloudflare binds a class rather than a function, and `class_name` in
+ * `wrangler.jsonc` points at whatever you export this as.
+ */
+export const entrypointFor = <Env, Events extends EventSchemaMap>(
+  flow: Flow<Events>,
+): WorkflowEntrypointClass<Env> =>
+  createWorkflowEntrypoint<Env, WorkflowRuntime<Events>>({
+    workflows: (flow.config.sagas ?? [])
+      .map((declared) => definitionOf(declared))
+      .filter(
+        (definition): definition is NonNullable<typeof definition> => definition !== undefined,
+      )
+      .map((definition) => definition as never),
+    runtime: (_env, params) => flow.for({ tenantId: params.tenantId, actor: params.actor }).runtime,
+  })
