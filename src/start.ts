@@ -3,39 +3,32 @@ import { messageOf } from './errors'
 import { validate } from './schema'
 import type { DurableWorkflowEnv, StandardSchemaV1, WorkflowRuntime } from './types'
 
-const instanceIdReadableLength = 60
-const instanceIdDigestLength = 16
+const instanceIdPrefix = 'wf-'
+const instanceIdLimit = 100
 
-const readable = (value: string) =>
-  value.replaceAll(/[^a-zA-Z0-9]+/g, '-').slice(0, instanceIdReadableLength)
+// Underscores survive because the platforms allow them and because a run id is far more
+// useful when it is the run id verbatim.
+const readable = (value: string) => value.replaceAll(/[^a-zA-Z0-9_]+/g, '-')
 
 /**
- * An instance id is how a durable platform recognises work it has already been asked to do, so
- * it has to be derived from the idempotency key AND from the tenant that asked. The key a
- * definition derives sees only the input, and an input can be the same string for every tenant
- * — "the spending report for March" is. An id that left the tenant out would let the first
- * tenant to ask claim the only instance, and every other tenant would be told its work was
- * already under way and never get an answer.
+ * The id a durable instance is created under: the workflow's name, made legal, and the run it
+ * belongs to.
  *
- * The id also has to satisfy `^[a-zA-Z0-9_][a-zA-Z0-9-_]*$` within 100 characters, which the
- * keys themselves do not — they carry dots and colons. So the id is the key made readable plus
- * a digest of the tenant and the key exactly as they were written.
+ * It used to be a digest of the tenant and the idempotency key, which quietly made the
+ * platform a SECOND dedup authority beside the run record — and the two disagreed the moment a
+ * run record was swept away. The key was free, the instance id was not, and the work could
+ * never be asked for again. There is one authority now, the run record, and an instance is
+ * simply named after the run it is carrying out.
+ *
+ * Cloudflare Workflows accepts `^[a-zA-Z0-9_][a-zA-Z0-9-_]*$` within 100 characters, and the
+ * run id is what has to survive truncation, so the name is what gives way.
  */
-export const durableInstanceId = async (name: string, idempotencyKey: string, tenantId: string) => {
-  const digest = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(`${tenantId}:${name}:${idempotencyKey}`),
-  )
-  const hex = [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('')
-    .slice(0, instanceIdDigestLength)
+export const instanceIdFor = (name: string, runId: string): string => {
+  const suffix = `-${readable(runId)}`
+  const room = instanceIdLimit - instanceIdPrefix.length - suffix.length
 
-  return `wf-${readable(idempotencyKey)}-${hex}`
+  return `${instanceIdPrefix}${readable(name).slice(0, Math.max(room, 0))}${suffix}`
 }
-
-const looksLikeADuplicateInstance = (error: unknown) =>
-  /already exists|duplicate/i.test(messageOf(error))
 
 /**
  * The run record is written BEFORE the instance is created, on purpose: if `create` never
@@ -94,16 +87,9 @@ export const startDurableWorkflow = async <
     return { runId: existing.id, deduplicated: true }
   }
 
-  // Deterministic when the definition derives a key, unique when it does not: either way an
-  // instance id can be arrived at twice only if the same work was asked for twice.
-  const id =
-    idempotencyKey === null
-      ? `wf-${readable(runId)}`
-      : await durableInstanceId(definition.name, idempotencyKey, ctx.tenantId)
-
   try {
     await env.WORKFLOWS.create({
-      id,
+      id: instanceIdFor(definition.name, runId),
       params: {
         name: definition.name,
         tenantId: ctx.tenantId,
@@ -120,11 +106,9 @@ export const startDurableWorkflow = async <
       error: messageOf(error),
     })
 
-    // An instance under this id already exists — which can only happen once the earlier run
-    // record has been swept away — so the work is already running somewhere. This attempt
-    // started nothing, and its run record says so.
-    if (looksLikeADuplicateInstance(error)) return { runId, deduplicated: true }
-
+    // Whatever the platform refused for, this attempt started nothing and its run record says
+    // so. There is no case here for reading a refusal as success: the id belongs to this run
+    // alone, so a platform reporting a duplicate is reporting something impossible.
     throw error
   }
 

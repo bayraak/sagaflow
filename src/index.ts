@@ -13,7 +13,7 @@ export { dispatchEvents, eventBatchLimit } from './outbox'
 export { createDurableRegistry, registerDurableWorkflow, type RegisteredWorkflow } from './registry'
 export { SchemaError } from './schema'
 export { createStep, defaultStepConfig, namedStep, reservedStepNames } from './step'
-export { durableInstanceId, startDurableWorkflow } from './start'
+export { instanceIdFor, startDurableWorkflow } from './start'
 export type {
   CompensationOutcome,
   DurableWorkflowEnv,

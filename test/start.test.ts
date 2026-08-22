@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'bun:test'
 
-import { defineWorkflow, startDurableWorkflow, type DurableWorkflowHandle } from '../src/index'
+import {
+  defineWorkflow,
+  instanceIdFor,
+  startDurableWorkflow,
+  type DurableWorkflowHandle,
+} from '../src/index'
 import { createLauncher } from './helpers/launcher'
 import { createTestRuntime, firstRun, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
@@ -128,5 +133,90 @@ describe('starting a durable workflow', () => {
     expect((thrown as Error).message).toContain('the platform is unavailable')
     expect(firstRun(runs).status).toBe('failed')
     expect(firstRun(runs).error).toContain('the platform is unavailable')
+  })
+})
+
+// The instance id used to be a digest of the tenant and the idempotency key, which made the
+// platform a second dedup authority beside the run record — and the two disagreed the moment a
+// run record was swept away: the key was free, the instance id was not, and the work could
+// never be asked for again. The run record is the only authority now, and the instance id is
+// simply the name of the run it belongs to.
+describe('the id a durable instance is created under', () => {
+  it('is derived from the run', async () => {
+    const { ctx } = createTestRuntime()
+    const { env, created } = createLauncher()
+
+    const { runId } = await startDurableWorkflow(env, startable(), { input: { mark: 'x' }, ctx })
+
+    expect(created[0]?.id).toBe(instanceIdFor('test.startable', runId))
+    expect(created[0]?.id).toContain(runId)
+  })
+
+  it('carries the workflow name so it can be recognised in a dashboard', () => {
+    expect(instanceIdFor('invoice.send', 'run_7')).toBe('wf-invoice-send-run_7')
+  })
+
+  // Cloudflare Workflows accepts `^[a-zA-Z0-9_][a-zA-Z0-9-_]*$` within 100 characters, and
+  // workflow names carry dots that the keys themselves are not allowed to.
+  it('is legal wherever it is used, however long the name is', () => {
+    const id = instanceIdFor(`billing.${'very-long-segment.'.repeat(12)}send`, 'run_7')
+
+    expect(id).toMatch(/^[a-zA-Z0-9_][a-zA-Z0-9-_]*$/)
+    expect(id.length).toBeLessThanOrEqual(100)
+  })
+
+  it('gives two runs of one key two ids once the first has released it', async () => {
+    const { ctx, runs, journal } = createTestRuntime()
+    const { env, created } = createLauncher()
+    const definition = startable()
+
+    const first = await startDurableWorkflow(env, definition, { input: { mark: 'x' }, ctx })
+    await journal.finishRun({
+      tenantId: 'tenant_local',
+      runId: first.runId,
+      status: 'failed',
+      error: 'the instance died',
+    })
+
+    const second = await startDurableWorkflow(env, definition, { input: { mark: 'x' }, ctx })
+
+    expect(second.deduplicated).toBe(false)
+    expect(runs).toHaveLength(2)
+    expect(created.map((instance) => instance.id)).toEqual([
+      instanceIdFor('test.startable', first.runId),
+      instanceIdFor('test.startable', second.runId),
+    ])
+  })
+
+  it('names an unkeyed run the same way a keyed one is named', async () => {
+    const { ctx } = createTestRuntime()
+    const { env, created } = createLauncher()
+
+    const unkeyed = defineWorkflow(
+      { name: 'test.unkeyed', input: markInput, execution: 'durable' },
+      async (input: { mark: string }, wf: DurableWorkflowHandle<TestRuntime>) => {
+        await wf.step(markStep('only'), input)
+      },
+    )
+
+    const { runId } = await startDurableWorkflow(env, unkeyed, { input: { mark: 'x' }, ctx })
+
+    expect(created[0]?.id).toBe(instanceIdFor('test.unkeyed', runId))
+  })
+
+  // With an id that is unique per run, a platform reporting a duplicate instance is reporting
+  // something impossible rather than something routine — so it is raised rather than quietly
+  // read as "already under way".
+  it('raises a duplicate-instance refusal instead of reading it as success', async () => {
+    const { ctx, runs } = createTestRuntime()
+    const { env } = createLauncher({ refusesWith: new Error('instance already exists') })
+
+    const thrown = await startDurableWorkflow(env, startable(), {
+      input: { mark: 'x' },
+      ctx,
+    }).catch((error: unknown) => error)
+
+    expect((thrown as Error).message).toContain('instance already exists')
+    expect(firstRun(runs).status).toBe('failed')
   })
 })
