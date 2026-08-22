@@ -1,0 +1,17 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["bun", "@cloudflare/workers-types"],
+    "paths": {
+      "@bayraak/sagaflow": ["../src/index.ts"],
+      "@bayraak/sagaflow/memory": ["../src/memory/index.ts"],
+      "@bayraak/sagaflow/testing": ["../src/testing/index.ts"],
+      "@bayraak/sagaflow/sql": ["../src/sql/index.ts"],
+      "@bayraak/sagaflow/d1": ["../src/d1/index.ts"],
+      "@bayraak/sagaflow/sqlite": ["../src/sqlite/index.ts"],
+      "@bayraak/sagaflow/cloudflare": ["../src/cloudflare/index.ts"]
+    }
+  },
+  "include": ["."]
+}

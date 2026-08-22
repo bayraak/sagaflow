@@ -69,7 +69,7 @@
     "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check .",
     "lint": "oxlint src test test-workerd examples",
-    "bench": "bun run bench/index.ts",
+    "bench": "tsc -p bench/tsconfig.json --noEmit && bun run bench/index.ts",
     "test": "bun test",
     "test:examples": "bun test --cwd examples bun-inline with-valibot agent-tools",
     "test:workerd": "vitest run",
