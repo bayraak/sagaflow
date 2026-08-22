@@ -146,9 +146,13 @@ export const createSqlJournal = (
 
       await driver.batch([
         {
+          // `and status = 'running'` is what stops a zombie coming back. A run the sweeper
+          // already closed has released its key, somebody else may hold it now, and letting
+          // this finish re-enter the held set would be a uniqueness violation thrown from
+          // inside a step. Whoever closed the run first decided how it ended.
           sql: `update ${tables.runs}
                 set status = ?, output = ?, error = ?, finished_at = ?
-                where tenant_id = ? and id = ?`,
+                where tenant_id = ? and id = ? and status = 'running'`,
           params: [
             params.status satisfies RunOutcome,
             encode(params.output),

@@ -162,6 +162,11 @@ export const createMemoryJournal = (options: { now?: () => number } = {}): Memor
       const run = runs.find((candidate) => candidate.id === params.runId)
       if (!run) return
 
+      // Only a run that is still open can be closed. A run the sweeper already closed has
+      // released its key and somebody else may hold it now; letting this finish re-enter the
+      // held set is exactly the collision a real table refuses.
+      if (run.status !== 'running') return
+
       run.status = params.status
       run.output = params.output
       run.error = params.error ?? null

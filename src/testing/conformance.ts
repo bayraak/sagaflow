@@ -377,6 +377,48 @@ export const journalConformance = (
       },
     ),
 
+    /*
+     * A zombie must not come back and take a key somebody else now holds.
+     *
+     * The sequence is real: a sweeper closes an abandoned inline run, which releases its key; a
+     * caller asks for the work again and the new run takes the key; then the first run turns
+     * out not to have been dead after all and finishes. Its finish would re-enter the held set
+     * under a key that is taken — a uniqueness violation thrown from inside a step, retried,
+     * and finally an instance in error over a run nobody was waiting for. Whoever closed the
+     * run first decided how it ended.
+     */
+    withSubject(
+      'finishRun does not reopen a run somebody else already closed',
+      async ({ journal, runStatus }) => {
+        const abandoned = await openRun(journal, { idempotencyKey: 'key-zombie' })
+        await closeRun(journal, abandoned, 'failed')
+        const replacement = await openRun(journal, { idempotencyKey: 'key-zombie' })
+
+        await journal.finishRun({
+          tenantId: tenant,
+          runId: abandoned,
+          status: 'completed',
+          output: { late: true },
+        })
+
+        assertIs(
+          await runStatus({ tenantId: tenant, runId: abandoned }),
+          'failed',
+          'a run that was already closed keeps the ending it was given',
+        )
+        assertIs(
+          (
+            await journal.findRunByIdempotencyKey({
+              tenantId: tenant,
+              idempotencyKey: 'key-zombie',
+            })
+          )?.id,
+          replacement,
+          'the key stays with the run that holds it',
+        )
+      },
+    ),
+
     withSubject('markEventsDispatched takes them out of the sweep', async ({ journal }) => {
       const runId = await openRun(journal)
       await journal.finishRun({

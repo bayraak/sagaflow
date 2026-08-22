@@ -31,6 +31,19 @@ export default {
       return Response.json(result)
     }
 
+    if (url.pathname === '/inline-bad') {
+      const { saveThingBadly } = await import('./definitions.js')
+      const failure = await saveThingBadly
+        .run({ input: { mark }, ctx })
+        .then(() => null)
+        .catch((error: unknown) => error)
+
+      return Response.json({
+        runId: (failure as { runId?: string }).runId ?? null,
+        outcome: (failure as { outcome?: string }).outcome ?? null,
+      })
+    }
+
     if (url.pathname === '/durable') {
       const { startDurableWorkflow } = await import('../src/index.js')
       const { shipThing } = await import('./definitions.js')
