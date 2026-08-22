@@ -1,5 +1,5 @@
 import { claimRun } from './claim.js'
-import type { DurableWorkflow } from './define.js'
+import { idempotencyKeyFor, type DurableWorkflow } from './define.js'
 import { messageOf } from './errors.js'
 import { compensatedEnvelope } from './events.js'
 import { validate } from './schema.js'
@@ -69,9 +69,7 @@ export const startDurableWorkflow = async <
    */
   const idempotencyKey =
     options.replayOf === undefined
-      ? definition.idempotency
-        ? definition.idempotency(parsed)
-        : null
+      ? idempotencyKeyFor(definition.name, definition.idempotency, parsed)
       : `replay:${options.replayOf}`
 
   const claim = await claimRun({

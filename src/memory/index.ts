@@ -238,3 +238,19 @@ export const createMemorySink = (options: { refuses?: boolean } = {}): MemorySin
 
   return { sink, sent, batches }
 }
+
+/**
+ * A sink that hands each envelope straight to a function, in the same process.
+ *
+ * For development, for tests, and for the genuinely single-process application that wants its
+ * events without running a queue. Delivery is still at-least-once from the engine's point of
+ * view — the drain can fail and the sweeper will carry the rows — so a handler here should be as
+ * tolerant of a repeat as a queue consumer would be.
+ */
+export const createInProcessSink = (
+  deliver: (envelope: EventEnvelope) => Promise<void> | void,
+): EventSink => ({
+  sendBatch: async (messages) => {
+    for (const message of messages) await deliver(message.body)
+  },
+})

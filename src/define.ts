@@ -1,3 +1,4 @@
+import { stableHash } from './canonical.js'
 import { executeRun } from './engine.js'
 import { validate } from './schema.js'
 import type {
@@ -9,11 +10,34 @@ import type {
   WorkflowRuntime,
 } from './types.js'
 
+/**
+ * The key a run claims, or null when it claims none. Declared here rather than at each executor
+ * so both derive it the same way.
+ */
+export const idempotencyKeyFor = (
+  name: string,
+  idempotency: true | ((input: never) => string) | undefined,
+  input: unknown,
+): string | null => {
+  if (idempotency === undefined) return null
+  if (idempotency === true) return `${name}:${stableHash(input)}`
+
+  return (idempotency as (given: unknown) => string)(input)
+}
+
 type WorkflowConfig<Input extends StandardSchemaV1, Execution extends WorkflowExecution> = {
   name: string
   input: Input
   execution: Execution
-  idempotency?(input: StandardSchemaV1.InferOutput<Input>): string
+  /**
+   * How this run is recognised as one somebody already asked for.
+   *
+   * `true` derives the key from the input itself — key order is not meaning, so it is the
+   * canonical rendering that is hashed, and the workflow's name is part of the key so two
+   * workflows given the same input do not collide. A function is there for when the key means
+   * something to somebody else and you want to control it exactly.
+   */
+  idempotency?: true | ((input: StandardSchemaV1.InferOutput<Input>) => string)
 }
 
 export type InlineWorkflow<Ctx extends WorkflowRuntime, Input extends StandardSchemaV1, Output> = {
@@ -21,7 +45,7 @@ export type InlineWorkflow<Ctx extends WorkflowRuntime, Input extends StandardSc
   execution: 'inline'
   input: Input
   output?: StandardSchemaV1
-  idempotency?(input: StandardSchemaV1.InferOutput<Input>): string
+  idempotency?: true | ((input: StandardSchemaV1.InferOutput<Input>) => string)
   body(input: StandardSchemaV1.InferOutput<Input>, wf: WorkflowHandle<Ctx>): Promise<Output>
   run(options: {
     input: unknown
@@ -35,7 +59,7 @@ export type DurableWorkflow<Ctx extends WorkflowRuntime, Input extends StandardS
   execution: 'durable'
   input: Input
   output?: StandardSchemaV1
-  idempotency?(input: StandardSchemaV1.InferOutput<Input>): string
+  idempotency?: true | ((input: StandardSchemaV1.InferOutput<Input>) => string)
   body(input: StandardSchemaV1.InferOutput<Input>, wf: DurableWorkflowHandle<Ctx>): Promise<Output>
 }
 
@@ -121,7 +145,7 @@ export function defineWorkflow<Ctx extends WorkflowRuntime, Input extends Standa
       // Validation first, and the run record only after it passes: an input the schema
       // refuses never becomes a run that somebody has to explain.
       const parsed = await validate(config.input, input, `the input of ${config.name}`)
-      const idempotencyKey = config.idempotency ? config.idempotency(parsed) : null
+      const idempotencyKey = idempotencyKeyFor(config.name, config.idempotency, parsed)
 
       let runId: string
       try {
