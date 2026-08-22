@@ -671,8 +671,7 @@ A fake that caches results by name reproduces exactly what a real platform does 
 re-invocation; one that calls `run` more than once reproduces retries.
 
 Writing a journal adapter? Do not write your own suite — `journalConformance` from
-`@bayraak/sagaflow/testing` is the contract as thirty-five executable cases, runnable under any test
-runner.
+`@bayraak/sagaflow/testing` is the contract as executable cases, runnable under any test runner.
 
 ## Versioning law
 

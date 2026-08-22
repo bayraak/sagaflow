@@ -131,7 +131,7 @@ for (const c of cases) it(c.name, c.run)
 ```
 
 It is runner-agnostic by construction — cases are named functions that throw — so bun, vitest,
-node:test and jest all run it unchanged. Thirty-five cases covering the key-held rule, the
+node:test and jest all run it unchanged. Thirty-seven cases covering the key-held rule, the
 release rule, step idempotency, the cancellation round trip, sweep ordering and filtering, and
 the one that needs your store broken on purpose: a finish that cannot write its events must not
 close the run either.

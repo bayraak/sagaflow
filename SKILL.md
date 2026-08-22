@@ -138,7 +138,8 @@ await executeDurable(definitionOf(chaseInvoice)!, { runId, input }, flow.runtime
 ```
 
 If you write a journal adapter, prove it with `journalConformance` from `@bayraak/sagaflow/testing` —
-34 cases covering every promise the engine relies on, runnable under any test runner.
+the contract as executable cases, covering every promise the engine relies on, runnable under
+any test runner.
 
 Assert on the rows the journal holds, not on which functions were called. To reproduce a durable
 replay, make `do` cache results by name; to reproduce retries, make it call `run` more than once

@@ -4,6 +4,53 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html), with the usual pre-1.0 caveat: while
 the major version is `0`, a minor bump may contain a breaking change and a patch never will.
 
+## Unreleased → 0.1.1
+
+Everything below is on `main` and unreleased. The version is bumped at publish, not here.
+
+### Added
+
+- **Batched durable starts.** `startDurableWorkflows` and `saga.startAll(inputs, flow)` create
+  instances through the platform's `createBatch` in batches of a hundred, falling back to one
+  call each on a binding that cannot batch. A fan-out — one instance per tenant, per recipient,
+  per chunk — was a hundred round trips against a rate limit counted per second. Every input is
+  validated before any run record is opened, and a refused batch closes every run it opened with
+  the announcement every other closed run gets.
+- **A size guard for step outputs.** `sizeGuard()` warns about a step whose output is too large
+  for a durable platform to checkpoint, by name and with a size, before the run that finally has
+  a large enough import finds out in production. It is an observer, and the engine measures only
+  when its `onStepOutput` hook exists, so a serialisation per step is paid for by the people who
+  asked for it. The zero-configuration instance installs it.
+- **`docs/cheatsheet.md`** — one screen: declaring, calling, the verbs and which to await,
+  binding undos to effects, configuring, operating, journals, Cloudflare, the four outcomes,
+  testing, and the short list of things never to do.
+- **`docs/positioning.md`, `docs/integrations.md`, `docs/migrating-from-medusa.md` and
+  `docs/launch/`** — where it sits, how it plugs into Hono, tRPC, Next.js, Express and Elysia,
+  how to arrive from Medusa's workflow SDK, and what to say on the day.
+
+### Fixed
+
+- **The reference journal left `replayOf` undefined where a table stores `null`.** An assertion
+  could pass against the in-memory adapter and fail against a real database, which is precisely
+  backwards — the reference adapter is meant to be the strict one.
+- **`flow.replay` would start a durable instance for an inline saga.** An inline run has no
+  instance to replay, and creating one for a definition that was never durable is a stranger
+  failure than being told no.
+
+### Changed
+
+- **One count of the conformance suite, and it cannot drift.** Three documents claimed three
+  different numbers of cases; the suite has thirty-seven. The number now appears once, where
+  somebody is deciding how much they are signing up for, and a test fails if it stops matching
+  the suite.
+
+### Still to merge before this ships
+
+- Property-based tests for the four invariants (`test/properties/`).
+- Benchmarks and `docs/benchmarks.md` — engine overhead per step and per run, absolute numbers
+  only, methodology and machine stated.
+- The formal model (`formal/`).
+
 ## 0.1.0 — unreleased
 
 Published as **`@bayraak/sagaflow`** — the unscoped name is reserved by npm's similarity
