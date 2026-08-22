@@ -1,4 +1,10 @@
-import type { Step, StepBackoff, StepContext, StepRetryConfig } from './types.js'
+import type {
+  CompensationReason,
+  Step,
+  StepBackoff,
+  StepContext,
+  StepRetryConfig,
+} from './types.js'
 
 /**
  * What a step is worth retrying for, when nothing says otherwise. Cloudflare's own default is
@@ -54,8 +60,16 @@ export type StepOptions<Ctx, Input, Output, Compensation> = StepBudget & {
     input: Input,
     ctx: StepContext<Ctx>,
   ): Promise<{ output: Output; compensateWith?: Compensation }>
-  /** How to undo it, given exactly what `run` said would undo it. */
-  compensate?(compensateWith: Compensation, ctx: StepContext<Ctx>): Promise<void>
+  /**
+   * How to undo it, given exactly what `run` said would undo it — and why it is being undone,
+   * because a refund note that says "the customer changed their mind" reads differently from
+   * one that says "the warehouse fell over".
+   */
+  compensate?(
+    compensateWith: Compensation,
+    ctx: StepContext<Ctx>,
+    reason: CompensationReason,
+  ): Promise<void>
 }
 
 const budgetOf = (options: StepBudget): StepRetryConfig => {

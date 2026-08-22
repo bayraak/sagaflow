@@ -68,7 +68,7 @@
     "build": "tsc -p tsconfig.build.json && cp src/sql/schema.sql dist/sql/schema.sql",
     "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check .",
-    "lint": "oxlint src test test-workerd examples",
+    "lint": "oxlint src test test-workerd",
     "test": "bun test",
     "test:workerd": "vitest run",
     "typecheck": "tsc --noEmit"

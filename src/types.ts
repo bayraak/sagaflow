@@ -252,6 +252,18 @@ export type StepContext<Ctx> = Ctx & {
   runId: string
   emit: EmitFn<EventsOf<Ctx>>
   idempotencyKey: string
+  /**
+   * Which attempt this is, from one. The idempotency key deliberately does NOT move with it —
+   * a stable key is the safe default — but a provider that wants a fresh request per attempt
+   * can be given `${ctx.idempotencyKey}:${ctx.attempt}`.
+   */
+  attempt: number
+}
+
+/** Why a compensation is running. */
+export type CompensationReason = {
+  /** The error that unwound the run. A `WorkflowCancelledError` when somebody asked it to stop. */
+  cause: unknown
 }
 
 /**
@@ -267,14 +279,25 @@ export type Step<Ctx, Input, Output, Compensation> = {
     input: Input,
     ctx: StepContext<Ctx>,
   ): Promise<{ output: Output; compensateWith?: Compensation }>
-  compensate?(compensateWith: Compensation, ctx: StepContext<Ctx>): Promise<void>
+  compensate?(
+    compensateWith: Compensation,
+    ctx: StepContext<Ctx>,
+    reason: CompensationReason,
+  ): Promise<void>
 }
+
+/**
+ * What `wf.step` answers with. It is awaited today, and declaring the narrower contract now is
+ * what lets a later version answer with something that is also iterable — for bodies written as
+ * generators — without that being a breaking change.
+ */
+export type StepCall<Output> = PromiseLike<Output>
 
 export type WorkflowHandle<Ctx> = {
   step<Input, Output, Compensation>(
     step: Step<Ctx, Input, Output, Compensation>,
     input: Input,
-  ): Promise<Output>
+  ): StepCall<Output>
   emit: EmitFn<EventsOf<Ctx>>
 }
 

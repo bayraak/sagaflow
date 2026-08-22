@@ -7,6 +7,7 @@ import { validate } from './schema.js'
 import { compensationStepName, defaultStepConfig, reservedStepNames } from './step.js'
 import type {
   CompensationOutcome,
+  CompensationReason,
   Step,
   EmitFn,
   EventEnvelope,
@@ -30,7 +31,12 @@ export type StepRunner = <Output>(
   run: (ctx: { attempt: number }) => Promise<Output>,
 ) => Promise<Output>
 
-type Undo = { seq: number; name: string; config: StepRetryConfig; run: () => Promise<void> }
+type Undo<Ctx> = {
+  seq: number
+  name: string
+  config: StepRetryConfig
+  run(ctx: StepContext<Ctx>, reason: CompensationReason): Promise<void>
+}
 
 export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   name: string
@@ -42,7 +48,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
 }): Promise<Output> => {
   const { name, runId, ctx, runner, invoke } = options
   const held: EventEnvelope[] = []
-  const undos: Undo[] = []
+  const undos: Undo<Ctx>[] = []
   const inflight: Promise<unknown>[] = []
   const usedNames = new Set<string>()
   let seq = 0
@@ -90,12 +96,14 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
 
   const contextFor = (
     idempotencyKey: string,
+    attempt: number,
     collect: (event: RawEvent) => void,
   ): StepContext<Ctx> => ({
     ...ctx,
     runId,
     emit: emitInto(collect) as EmitFn<EventsOf<Ctx>>,
     idempotencyKey,
+    attempt,
   })
 
   const runStep = async <StepInput, StepOutput, Compensation>(
@@ -140,7 +148,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
       try {
         const produced = await step.run(
           input,
-          contextFor(stepIdempotencyKey(runId, current), (event) => emitted.push(event)),
+          contextFor(stepIdempotencyKey(runId, current), attempt, (event) => emitted.push(event)),
         )
         const recorded = await ctx.journal.recordStep({
           tenantId: ctx.tenantId,
@@ -179,14 +187,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
         seq: current,
         name: step.name,
         config: step.config,
-        // Undoing a charge is a refund, not the charge again: a different side effect, and
-        // so a different key. What an undo emits is dropped with the run it is undoing, so
-        // it is collected nowhere.
-        run: () =>
-          compensate(
-            compensateWith,
-            contextFor(compensationIdempotencyKey(runId, current), () => undefined),
-          ),
+        run: (undoContext, reason) => compensate(compensateWith, undoContext, reason),
       })
     }
 
@@ -229,7 +230,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
    * Every undo is attempted even when an earlier one refuses, so no completed step is left
    * standing just because its neighbour could not be reversed.
    */
-  const compensate = async (): Promise<'compensated' | 'failed'> => {
+  const compensate = async (cause: unknown): Promise<'compensated' | 'failed'> => {
     // Nothing is undone until everything has stopped, so that every undo there is going to be
     // is registered before the first one runs.
     await Promise.allSettled(inflight)
@@ -243,7 +244,13 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
       try {
         await runner(compensationStepName(undo.name), undo.config, async ({ attempt }) => {
           try {
-            await undo.run()
+            // Undoing a charge is a refund, not the charge again: a different side effect, and
+            // so a different key. What an undo emits is dropped with the run it is undoing, so
+            // it is collected nowhere.
+            await undo.run(
+              contextFor(compensationIdempotencyKey(runId, undo.seq), attempt, () => undefined),
+              { cause },
+            )
             await ctx.journal.recordStep({
               tenantId: ctx.tenantId,
               runId,
@@ -293,7 +300,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
       ? ((await validate(options.output, produced, `the output of ${name}`)) as Output)
       : produced
   } catch (error) {
-    const undone = await compensate()
+    const undone = await compensate(error)
 
     // Somebody changing their mind and something breaking are different facts, and a run that
     // was asked to stop and came all the way back is `cancelled`. If an undo refused, it is

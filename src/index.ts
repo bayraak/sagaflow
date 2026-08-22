@@ -37,6 +37,7 @@ export { abandonedSweepLimit, sweepAbandonedRuns } from './sweep.js'
 export { instanceIdFor, startDurableWorkflow } from './start.js'
 export type {
   CompensationOutcome,
+  CompensationReason,
   DurableWorkflowEnv,
   DurableWorkflowHandle,
   DurableWorkflowParams,
@@ -54,6 +55,7 @@ export type {
   StandardSchemaV1,
   Step,
   StepBackoff,
+  StepCall,
   StepContext,
   StepPrimitive,
   StepRetryConfig,

@@ -1,0 +1,43 @@
+{
+  // TEST-ONLY. This worker exists so the D1 journal, the Cloudflare step primitive and the
+  // entrypoint helper can be proven against real workerd, real local D1, a real Workflows
+  // binding and a real Queue. It is never deployed and it is not part of the published package.
+  //
+  // There is deliberately no remote-only binding here — no `ai`, no anything that makes the
+  // pool contact Cloudflare before a test runs. "The suite never touches the network" is a
+  // property of this file, not a promise about the code.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sagaflow-test",
+  "main": "test-workerd/worker.ts",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sagaflow-test",
+      "database_id": "00000000-0000-0000-0000-0000000000test",
+    },
+  ],
+  "workflows": [
+    {
+      "name": "sagaflow-test-workflow",
+      "binding": "WORKFLOWS",
+      "class_name": "SagaflowTestWorkflow",
+    },
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "EVENTS",
+        "queue": "sagaflow-test-events",
+      },
+    ],
+    "consumers": [
+      {
+        "queue": "sagaflow-test-events",
+        "max_batch_size": 10,
+        "max_batch_timeout": 1,
+      },
+    ],
+  },
+}
