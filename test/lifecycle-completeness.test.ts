@@ -60,7 +60,7 @@ describe('every closed run announces itself, once', () => {
       error: 'abandoned: no finish after 300000ms',
       outcome: 'failed',
     })
-    expect(memory.outbox[0]?.id).toBe(`${runId}:0`)
+    expect(memory.outbox[0]?.id).toBe(`${runId}:swept`)
     expect(memory.outbox[0]?.tenantId).toBe('tenant_local')
   })
 

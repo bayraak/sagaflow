@@ -2,7 +2,7 @@ import { claimRun } from './claim.js'
 import { idempotencyKeyFor, type DurableWorkflow } from './define.js'
 import { messageOf } from './errors.js'
 import { compensatedEnvelope } from './events.js'
-import { envelopeId } from './identity.js'
+import { lifecycleEnvelopeId } from './identity.js'
 import { validate } from './schema.js'
 import type { StandardSchemaV1, WorkflowLauncher, WorkflowRuntime } from './types.js'
 
@@ -122,8 +122,8 @@ export const startDurableWorkflow = async <
           actor: ctx.actor ?? null,
           error: messageOf(error),
           outcome: 'failed',
-          // The instance never existed, so this run has emitted nothing else.
-          id: envelopeId(runId, 0),
+          // Identified by what it is, not by a position in a sequence this run never began.
+          id: lifecycleEnvelopeId(runId, 'start-refused'),
         }),
       ],
     })
@@ -234,7 +234,7 @@ export const startDurableWorkflows = async <
               actor: ctx.actor ?? null,
               error: messageOf(error),
               outcome: 'failed',
-              id: envelopeId(claim.runId, 0),
+              id: lifecycleEnvelopeId(claim.runId, 'start-refused'),
             }),
           ],
         }),

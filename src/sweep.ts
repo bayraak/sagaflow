@@ -1,5 +1,5 @@
 import { compensatedEnvelope } from './events.js'
-import { envelopeId } from './identity.js'
+import { lifecycleEnvelopeId } from './identity.js'
 import type { RunJournal } from './types.js'
 
 /** How many abandoned runs one sweep closes. The next sweep takes the rest. */
@@ -44,8 +44,11 @@ export const sweepAbandonedRuns = async (options: {
       runId: run.runId,
       status: 'failed',
       error,
-      // The run emitted nothing — it never reached its finish — so the announcement is the
-      // first envelope this run has ever produced, and takes the first ordinal.
+      // Identified by what it is rather than by a position in the run's emission sequence.
+      // "The run emitted nothing" is sound about a run that really is dead and unsound as an
+      // identity: if the window is set shorter than a request takes, ordinal 0 is also the id
+      // of an emission the run really made, and the outbox's conflict clause would resolve the
+      // clash by dropping one of them. A distinct suffix cannot clash, and costs nothing.
       events: [
         compensatedEnvelope({
           runId: run.runId,
@@ -54,7 +57,7 @@ export const sweepAbandonedRuns = async (options: {
           actor: null,
           error,
           outcome: 'failed',
-          id: envelopeId(run.runId, 0),
+          id: lifecycleEnvelopeId(run.runId, 'swept'),
         }),
       ],
     })
