@@ -15,6 +15,7 @@ export {
 export type { Announce, Announcement } from './announce.js'
 export { canonicalise, stableHash } from './canonical.js'
 export { executeDurable } from './durable.js'
+export { explainRun, type ExplainFormat } from './explain.js'
 export { sagaflow, type Flow, type RunReport, type SagaflowConfig } from './flow.js'
 export {
   attempt,

@@ -1,6 +1,7 @@
 import { runInScope } from './ambient.js'
 import { requestCancellation } from './cancel.js'
 import type { DurableWorkflow } from './define.js'
+import { explainRun, type ExplainFormat } from './explain.js'
 import { configureDefault, provideDefaultFactory } from './instance.js'
 import { createInProcessSink, createMemoryJournal } from './memory/index.js'
 import { definitionOf, type AnySaga } from './saga.js'
@@ -57,6 +58,8 @@ export type Flow<Events extends EventSchemaMap = EventSchemaMap> = {
   cancel(runId: string): Promise<boolean>
   /** The run and its trail, for whoever is asking what happened. */
   inspect(runId: string): Promise<RunReport | null>
+  /** The same run, arranged so a person can read it. */
+  explain(runId: string, options?: { format?: ExplainFormat }): Promise<string>
   /**
    * Say the development-mode warning if it is owed. Called by a definition before it runs; you
    * will not need it.
@@ -199,6 +202,13 @@ export const sagaflow: {
         return flow.startDurable(definition, run.input, { replayOf: runId })
       },
       cancel: (runId) => requestCancellation({ journal, tenantId: runtime.tenantId, runId }),
+      explain: (runId, explainOptions) =>
+        explainRun({
+          journal,
+          tenantId: runtime.tenantId,
+          runId,
+          ...(explainOptions?.format === undefined ? {} : { format: explainOptions.format }),
+        }),
       inspect: async (runId) => {
         const run = await runOf(journal, runtime.tenantId, runId)
         if (!run) return null
