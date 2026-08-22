@@ -278,6 +278,21 @@ export type RunObserver = {
     durationMs: number
   }): void
   onRunEnd?(fact: { runId: string; name: string; status: RunOutcome; durationMs: number }): void
+  /**
+   * A call that is not an effect, reported and not journalled.
+   *
+   * The journal is the effects a run had, which is what keeps it short enough to read. The call
+   * tree is a different question and its answer belongs in a trace: these two hooks are where an
+   * OpenTelemetry span or a run view gets it.
+   */
+  onSpanStart?(fact: { runId: string; name: string; args: string }): void
+  onSpanEnd?(fact: {
+    runId: string
+    name: string
+    args: string
+    durationMs: number
+    error?: unknown
+  }): void
 }
 
 /**

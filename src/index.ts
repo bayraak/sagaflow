@@ -5,6 +5,14 @@ export { createInlineRunner } from './retry.js'
 export { claimRun, type RunClaim } from './claim.js'
 export { compensationIdempotencyKey, envelopeId, stepIdempotencyKey } from './identity.js'
 export { action, type ActionOptions } from './action.js'
+export {
+  actions,
+  type ActionsSpec,
+  type MethodSpec,
+  type UndoFor,
+  type UndoSpec,
+} from './actions.js'
+export type { Announce, Announcement } from './announce.js'
 export { canonicalise, stableHash } from './canonical.js'
 export { executeDurable } from './durable.js'
 export { sagaflow, type Flow, type RunReport, type SagaflowConfig } from './flow.js'

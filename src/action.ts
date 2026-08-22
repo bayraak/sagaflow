@@ -1,10 +1,17 @@
 import { activeFrame, step, type StepDeclaration, type StepUndo } from './ambient.js'
+import { announceResult, type Announce } from './announce.js'
 import { SagaflowError } from './errors.js'
 import { assertNameIsAvailable } from './step.js'
 
-export type ActionOptions<Output> = StepDeclaration<Output> & {
+export type ActionOptions<Output, Input> = StepDeclaration<Output> & {
   /** What the step is recorded as. Defaults to the function's own name. */
   name?: string
+  /**
+   * What this effect announces when it succeeds. Emitted from inside the step, so it is held
+   * with the run, memoised with the step — a replay announces exactly once — and dropped
+   * entirely if the run is undone.
+   */
+  announce?: Announce<Output, Input>
 }
 
 /**
@@ -21,7 +28,7 @@ export type ActionOptions<Output> = StepDeclaration<Output> & {
  */
 export const action = <Args extends unknown[], Output>(
   work: (...args: Args) => Output | Promise<Output>,
-  options: ActionOptions<Output> = {},
+  options: ActionOptions<Output, Args[0]> = {},
 ): ((...args: Args) => Promise<Output>) => {
   const name = options.name ?? work.name
 
@@ -42,6 +49,15 @@ export const action = <Args extends unknown[], Output>(
   return async (...args: Args): Promise<Output> => {
     if (!activeFrame()) return work(...args)
 
-    return step(name, () => work(...args), declared)
+    return step(
+      name,
+      async () => {
+        const result = await work(...args)
+        await announceResult(options.announce, result, args[0])
+
+        return result
+      },
+      declared,
+    )
   }
 }

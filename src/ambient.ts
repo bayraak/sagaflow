@@ -217,6 +217,17 @@ export const ctx = <Extra = Record<string, unknown>>(): Extra & {
 /** The id of the run this body is part of. */
 export const runId = (): string => inside('runId').handle.runId
 
+/** The observer this run was configured with, if any. For tracing what is not journalled. */
+export const activeObserver = ():
+  | { frame: Frame; observer: NonNullable<WorkflowRuntime['observer']> }
+  | undefined => {
+  const frame = frames.getStore()
+  const observer = frame?.handle.runtime.observer
+  if (!frame || !observer) return undefined
+
+  return { frame, observer }
+}
+
 const insideStep = (verb: string): StepRunContext => {
   const scoped = inside(verb).step
   if (!scoped) {

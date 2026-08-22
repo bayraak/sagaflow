@@ -178,6 +178,80 @@ Two things fail in ways nothing else will notice:
 
 Both are idempotent and both are your cron.
 
+## The door is the step
+
+"Every effect is a step" is the founding rule, and a rule you have to remember at every call site
+is a rule somebody forgets on a Friday afternoon. So do not remember it at every call site.
+
+When effects are reached through one object — a queries module, a service, a Cloudflare binding —
+wrap the object once:
+
+```ts
+export const seats = actions(seatService, {
+  reserve: {
+    undo: (held) => seatService.release(held.id),
+    announce: (held) => ['seat.reserved', { id: held.id }],
+  },
+  release: null, // irreversible, and said so on purpose
+  trace: true,
+})
+```
+
+and the bodies go back to being plain code:
+
+```ts
+const createBooking = saga('booking.create', async (input: { seat: string }) => {
+  if (!(await seats.available(input.seat))) throw new Error('that seat is taken')
+
+  return seats.reserve(input.seat)
+})
+```
+
+Both lines read as themselves. `reserve` is a recorded, retried, undoable step that announces
+what it did. `available` is not listed, so it stays a plain call — except inside a **durable**
+saga, where it is memoised as a read-step, because a durable body runs again from the top and a
+query answered differently the second time makes the replay diverge.
+
+Outside a saga the wrapped object is the object. That is what makes it safe to export as _the_
+module: every caller that is not a saga keeps working, and there is no second import to choose
+between.
+
+### Journal the effects, trace the rest
+
+`trace: true` reports every call through the object to the observer as a span — name, a short
+rendering of the arguments, how long it took, whether it threw — **with no journal row**.
+
+The two are deliberately different questions. The journal is the effects a run had, and its value
+comes from being short enough to read a year later. The call tree is what you want at three in
+the morning, and it belongs in a trace where it can be sampled, dropped and never joined against
+anything.
+
+Because the engine owns every boundary and every entry point — the run, the steps, the spans, the
+events, the outbox — the whole program becomes visible through one seam rather than four.
+
+### Effects declare how they are undone and what they announce
+
+`undo` and `announce` live with the effect, not at the call site. An `announce` is emitted from
+_inside_ the step, which is what gives it every property the body's own `emit` has and one more:
+it is part of the step's memoised result, so a replayed step announces exactly once, and a run
+that is undone announces none of it.
+
+`emit` in a body remains, and is for the composite facts no single effect owns — "the booking was
+created" is not something the seat service or the card service can know on its own.
+
+### Totality
+
+```ts
+export const undos = {
+  reserve: (held) => seatService.release(held.id),
+  sendTicket: null,
+} satisfies UndoSpec<typeof writes>
+```
+
+Adding a write to the module fails compilation until somebody has decided how to undo it. `null`
+is a decision — "this one cannot be taken back" — and it has to be written down rather than
+arrived at by omission.
+
 ## Hooks, and why they are not here yet
 
 A hook is a named extension point inside a run for a **different module** — the plugin that wants

@@ -54,7 +54,40 @@ const createBooking = saga('booking.create', async (input: { seat: string }) => 
 await createBooking({ seat: '12A' })
 ```
 
-### In a real application: bind the undo to the effect
+### In a real application: wrap the door
+
+Effects usually arrive through one object — a queries module, a service, a binding. Wrap it once
+and every body that uses it is plain code:
+
+```ts
+import { actions } from 'sagaflow'
+
+export const seats = actions(seatService, {
+  reserve: {
+    undo: (held) => seatService.release(held.id),
+    announce: (held) => ['seat.reserved', { id: held.id }],
+  },
+  release: null, // irreversible, and said so on purpose
+  trace: true, // report every call as a span; journal only the effects
+})
+
+const createBooking = saga('booking.create', async (input: { seat: string }) => {
+  if (!(await seats.available(input.seat))) throw new Error('that seat is taken')
+
+  return seats.reserve(input.seat)
+})
+```
+
+`reserve` is listed, so it is a recorded, retried, undoable step that announces what it did.
+`available` is not, so it stays a plain call — except inside a **durable** saga, where it is
+memoised so a replay sees what the first invocation saw. **Outside a saga the wrapped object is
+the object**, so every caller that is not a saga keeps working and there is no second import to
+choose between.
+
+`satisfies UndoSpec<Writes>` makes it a compile error to add a write without deciding how to undo
+it. `null` is a decision, written down.
+
+### Or bind the undo to one effect at a time
 
 Repeating the undo at every call site is where it goes wrong — the fourth caller forgets, and the
 run that needed it most is the one that cannot be taken back. Write it once, beside the thing it
