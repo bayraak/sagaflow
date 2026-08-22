@@ -1,5 +1,9 @@
-import { createSqlJournal, type SqlDriver, type SqlTableNames } from '../sql/index.js'
-import type { RunJournal } from '../types.js'
+import {
+  createSqlJournal,
+  type SqlDriver,
+  type SqlJournal,
+  type SqlTableNames,
+} from '../sql/index.js'
 
 /**
  * Structurally `bun:sqlite`'s Database and `node:sqlite`'s DatabaseSync, narrowed to what a
@@ -58,4 +62,4 @@ export const createSqliteDriver = (db: SqliteDatabase): SqlDriver => {
 export const createSqliteJournal = (
   db: SqliteDatabase,
   options: { tables?: Partial<SqlTableNames>; now?: () => number } = {},
-): RunJournal => createSqlJournal(createSqliteDriver(db), options)
+): SqlJournal => createSqlJournal(createSqliteDriver(db), options)

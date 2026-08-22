@@ -1,7 +1,11 @@
 /// <reference types="@cloudflare/workers-types" />
 
-import { createSqlJournal, type SqlDriver, type SqlTableNames } from '../sql/index.js'
-import type { RunJournal } from '../types.js'
+import {
+  createSqlJournal,
+  type SqlDriver,
+  type SqlJournal,
+  type SqlTableNames,
+} from '../sql/index.js'
 
 /**
  * D1, made to look like the driver the journal wants.
@@ -36,4 +40,4 @@ export const createD1Driver = (db: D1Database): SqlDriver => {
 export const createD1Journal = (
   db: D1Database,
   options: { tables?: Partial<SqlTableNames>; now?: () => number } = {},
-): RunJournal => createSqlJournal(createD1Driver(db), options)
+): SqlJournal => createSqlJournal(createD1Driver(db), options)

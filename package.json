@@ -65,10 +65,11 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && cp src/sql/schema.sql dist/sql/schema.sql",
+    "build": "bun run schema && tsc -p tsconfig.build.json && cp src/sql/schema.sql dist/sql/schema.sql",
     "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check .",
-    "lint": "oxlint src test test-workerd examples",
+    "lint": "oxlint src test test-workerd examples scripts",
+    "schema": "bun scripts/write-schema.ts",
     "test": "bun test",
     "test:examples": "bun test --cwd examples bun-inline with-valibot agent-tools",
     "test:workerd": "vitest run",

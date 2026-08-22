@@ -1,9 +1,17 @@
--- sagaflow reference schema (SQLite / Cloudflare D1).
+/*
+ * The schema, and the single source of it.
+ *
+ * A TypeScript module rather than a file on disk, because `migrate()` has to be able to run it
+ * in a Worker, where there is no file system to read. `schema.sql` is written from this and
+ * shipped beside it for whoever's migration tool wants a file — and a test asserts the two have
+ * not drifted, because a schema that exists twice eventually exists differently.
+ */
+export const schemaSql = `-- sagaflow reference schema (SQLite / Cloudflare D1).
 --
--- GENERATED from src/sql/schema.ts by `bun run schema`. Edit that file, not this one.
+-- GENERATED from src/sql/schema.ts by \`bun run schema\`. Edit that file, not this one.
 --
 -- Three tables. Your migration tool owns them, not sagaflow — copy this into a migration and
--- change what you like. If you rename a table, pass the new name through the `tables` option of
+-- change what you like. If you rename a table, pass the new name through the \`tables\` option of
 -- createSqlJournal so the engine and your schema agree.
 
 create table if not exists saga_runs (
@@ -80,3 +88,31 @@ create table if not exists saga_outbox (
 
 create index if not exists saga_outbox_undispatched on saga_outbox (dispatched_at, created_at);
 create index if not exists saga_outbox_tenant_created on saga_outbox (tenant_id, created_at);
+`
+
+/**
+ * The same schema, one statement at a time, with comments removed — what `migrate()` executes
+ * and what the `--format sql` bin prints when you ask for statements.
+ */
+export const schemaStatements: readonly string[] = schemaSql
+  .replaceAll(/^\s*--.*$/gm, '')
+  .split(';')
+  .map((statement) => statement.trim())
+  .filter((statement) => statement.length > 0)
+
+/**
+ * The same schema with the table names replaced. `createSqlJournal` lets a caller rename the
+ * three tables, and the DDL has to follow or `migrate()` would create tables the journal never
+ * writes to.
+ */
+export const schemaFor = (tables: {
+  runs: string
+  steps: string
+  outbox: string
+}): readonly string[] =>
+  schemaStatements.map((statement) =>
+    statement
+      .replaceAll('saga_run_steps', tables.steps)
+      .replaceAll('saga_runs', tables.runs)
+      .replaceAll('saga_outbox', tables.outbox),
+  )

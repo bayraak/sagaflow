@@ -7,8 +7,16 @@ import type {
   WorkflowExecution,
 } from '../types.js'
 import type { SqlDriver } from './driver.js'
+import { schemaFor } from './schema.js'
 
 export type { SqlDriver, SqlStatement } from './driver.js'
+export { schemaFor, schemaSql, schemaStatements } from './schema.js'
+
+/**
+ * A journal that can also create its own tables. `migrate()` is the two-minute path; your
+ * migration tool is the grown-up one, and the SQL it needs is the same SQL.
+ */
+export type SqlJournal = RunJournal & { migrate(): Promise<void> }
 
 /**
  * What the three tables are called. sagaflow does not own your schema — your migration tool
@@ -68,11 +76,22 @@ const encode = (value: unknown): string | null =>
 export const createSqlJournal = (
   driver: SqlDriver,
   options: { tables?: Partial<SqlTableNames>; now?: () => number } = {},
-): RunJournal => {
+): SqlJournal => {
   const tables = { ...defaultTableNames, ...options.tables }
   const now = options.now ?? ((): number => Date.now())
 
   return {
+    /*
+     * Create the three tables, if they are not there.
+     *
+     * Every statement is `if not exists`, so running it twice is running it once — which matters
+     * because the honest place to call this is at the top of a process, or in a test's setup,
+     * where nobody is tracking whether it has run before.
+     */
+    migrate: async () => {
+      for (const statement of schemaFor(tables)) await driver.run({ sql: statement, params: [] })
+    },
+
     insertRun: async (params) => {
       const id = identity()
 

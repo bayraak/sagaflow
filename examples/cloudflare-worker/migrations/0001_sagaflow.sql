@@ -1,5 +1,7 @@
 -- sagaflow reference schema (SQLite / Cloudflare D1).
 --
+-- GENERATED from src/sql/schema.ts by `bun run schema`. Edit that file, not this one.
+--
 -- Three tables. Your migration tool owns them, not sagaflow — copy this into a migration and
 -- change what you like. If you rename a table, pass the new name through the `tables` option of
 -- createSqlJournal so the engine and your schema agree.
