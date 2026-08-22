@@ -49,6 +49,7 @@ export type MemoryFinishRow = {
  */
 export const createMemoryJournal = (options: { now?: () => number } = {}) => {
   const now = options.now ?? (() => Date.now())
+  let outboxWritesFail = false
   const runs: MemoryRunRow[] = []
   const steps: MemoryStepRow[] = []
   const finishes: MemoryFinishRow[] = []
@@ -109,6 +110,12 @@ export const createMemoryJournal = (options: { now?: () => number } = {}) => {
       return true
     },
     finishRun: async (params) => {
+      // Refused before anything is touched, which is what a store with one atomic write does:
+      // either the run closed and its events are queued, or neither happened.
+      if (outboxWritesFail && (params.events?.length ?? 0) > 0) {
+        throw new Error('the outbox is unwritable')
+      }
+
       finishes.push({
         runId: params.runId,
         status: params.status,
@@ -166,7 +173,21 @@ export const createMemoryJournal = (options: { now?: () => number } = {}) => {
     },
   }
 
-  return { journal, runs, steps, finishes, outbox, dispatched }
+  return {
+    journal,
+    runs,
+    steps,
+    finishes,
+    outbox,
+    dispatched,
+    /**
+     * Make every outbox write fail from here on, so a suite can prove that a finish which
+     * cannot queue its events does not close the run either.
+     */
+    breakOutboxWrites: () => {
+      outboxWritesFail = true
+    },
+  }
 }
 
 /**

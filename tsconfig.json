@@ -18,7 +18,12 @@
     "types": ["bun"],
     "paths": {
       "sagaflow": ["./src/index.ts"],
-      "sagaflow/memory": ["./src/memory/index.ts"]
+      "sagaflow/memory": ["./src/memory/index.ts"],
+      "sagaflow/testing": ["./src/testing/index.ts"],
+      "sagaflow/sql": ["./src/sql/index.ts"],
+      "sagaflow/d1": ["./src/d1/index.ts"],
+      "sagaflow/sqlite": ["./src/sqlite/index.ts"],
+      "sagaflow/cloudflare": ["./src/cloudflare/index.ts"]
     }
   },
   "include": ["src", "test", "test-workerd", "vitest.config.ts"]
