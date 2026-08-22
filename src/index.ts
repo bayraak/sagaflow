@@ -53,7 +53,12 @@ export type { TryRunResult } from './result.js'
 export { anything, SchemaError } from './schema.js'
 export { compensationStepName, defaultStepConfig, reservedStepNames } from './step.js'
 export { abandonedSweepLimit, sweepAbandonedRuns } from './sweep.js'
-export { instanceIdFor, startDurableWorkflow } from './start.js'
+export {
+  instanceBatchLimit,
+  instanceIdFor,
+  startDurableWorkflow,
+  startDurableWorkflows,
+} from './start.js'
 export type {
   CompensationOutcome,
   CompensationReason,

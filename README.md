@@ -315,6 +315,12 @@ const chaseInvoice = saga(
 )
 
 await chaseInvoice.start({ invoiceId: 'inv_1' }, flow)
+
+// A fan-out is one call, not one per instance: createBatch, in batches of a hundred.
+await chaseInvoice.startAll(
+  overdue.map((invoiceId) => ({ invoiceId })),
+  flow,
+)
 ```
 
 ## A saga inside a saga

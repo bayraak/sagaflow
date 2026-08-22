@@ -103,6 +103,12 @@ export type DurableSaga<Input, Output> = Callable<Input, Output> & {
     flow?: Flow,
     options?: CallOptions,
   ): Promise<{ runId: string; deduplicated: boolean }>
+  /** Many at once, in as few calls as the platform allows. */
+  startAll(
+    inputs: Input[],
+    flow?: Flow,
+    options?: { parentRunId?: string | null },
+  ): Promise<{ runId: string; deduplicated: boolean }[]>
 }
 
 export type AnySaga = DurableSaga<never, unknown> | InlineSaga<never, unknown>
@@ -257,6 +263,12 @@ export function saga(
             call?: CallOptions,
           ): Promise<{ runId: string; deduplicated: boolean }> =>
             instanceFor(flow).startDurable(definition, given, call),
+          startAll: (
+            givens: unknown[],
+            flow?: Flow,
+            batch?: { parentRunId?: string | null },
+          ): Promise<{ runId: string; deduplicated: boolean }[]> =>
+            instanceFor(flow).startDurableAll(definition, givens, batch),
         }
       : {}),
     durable,

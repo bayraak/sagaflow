@@ -135,3 +135,113 @@ export const startDurableWorkflow = async <
 
   return { runId, deduplicated: false }
 }
+
+/** How many instances one `createBatch` call carries. Cloudflare's own limit for the call. */
+export const instanceBatchLimit = 100
+
+/**
+ * Start many durable runs at once.
+ *
+ * A fan-out — one instance per tenant, per recipient, per chunk — is the shape that needs this.
+ * Creating a hundred instances one call at a time is a hundred round trips against a rate limit
+ * counted per second, and `createBatch` exists for exactly that. A binding without it still
+ * works: the fallback is one call each.
+ *
+ * Every run record is opened first, as it is for a single start, so a refused batch leaves
+ * something behind to explain itself. Inputs whose key is already held are answered from the run
+ * that holds it and are not put in the batch.
+ */
+export const startDurableWorkflows = async <
+  Ctx extends WorkflowRuntime,
+  Input extends StandardSchemaV1,
+  Output,
+>(options: {
+  launcher: WorkflowLauncher
+  definition: DurableWorkflow<Ctx, Input, Output>
+  inputs: unknown[]
+  ctx: Ctx
+  parentRunId?: string | null
+}): Promise<{ runId: string; deduplicated: boolean }[]> => {
+  const { ctx, definition, launcher } = options
+
+  // Every input is validated before any run is opened, so one bad item does not leave a run
+  // record for work nobody is going to do.
+  const parsed = await Promise.all(
+    options.inputs.map((input) =>
+      validate(definition.input, input, `the input of ${definition.name}`),
+    ),
+  )
+
+  const claimed = await Promise.all(
+    parsed.map(async (input) => {
+      const idempotencyKey = idempotencyKeyFor(definition.name, definition.idempotency, input)
+
+      const claim = await claimRun({
+        journal: ctx.journal,
+        tenantId: ctx.tenantId,
+        idempotencyKey,
+        insert: () =>
+          ctx.journal.insertRun({
+            tenantId: ctx.tenantId,
+            name: definition.name,
+            execution: 'durable',
+            idempotencyKey,
+            input,
+            parentRunId: options.parentRunId ?? null,
+          }),
+      })
+
+      return { claim, input }
+    }),
+  )
+
+  const starting = claimed.filter((one) => one.claim.claimed)
+  const instances = starting.map(({ claim, input }) => ({
+    id: instanceIdFor(definition.name, claim.runId),
+    params: {
+      name: definition.name,
+      tenantId: ctx.tenantId,
+      actor: ctx.actor ?? null,
+      input,
+      runId: claim.runId,
+    },
+  }))
+
+  try {
+    if (launcher.createBatch) {
+      for (let index = 0; index < instances.length; index += instanceBatchLimit) {
+        await launcher.createBatch(instances.slice(index, index + instanceBatchLimit))
+      }
+    } else {
+      for (const instance of instances) await launcher.create(instance)
+    }
+  } catch (error) {
+    // The run records exist and nothing is going to carry them out, so each one is closed the
+    // way every other run is closed — with the announcement that says so.
+    await Promise.all(
+      starting.map(({ claim }) =>
+        ctx.journal.finishRun({
+          tenantId: ctx.tenantId,
+          runId: claim.runId,
+          status: 'failed',
+          error: messageOf(error),
+          events: [
+            compensatedEnvelope({
+              runId: claim.runId,
+              name: definition.name,
+              tenantId: ctx.tenantId,
+              actor: ctx.actor ?? null,
+              error: messageOf(error),
+              outcome: 'failed',
+              ordinal: 0,
+            }),
+          ],
+        }),
+      ),
+    )
+
+    throw error
+  }
+
+  return claimed.map(({ claim }) => ({ runId: claim.runId, deduplicated: !claim.claimed }))
+}

@@ -5,7 +5,7 @@ import { explainRun, type ExplainFormat } from './explain.js'
 import { configureDefault, provideDefaultFactory } from './instance.js'
 import { createInProcessSink, createMemoryJournal } from './memory/index.js'
 import { definitionOf, type AnySaga } from './saga.js'
-import { startDurableWorkflow } from './start.js'
+import { startDurableWorkflow, startDurableWorkflows } from './start.js'
 import type {
   EventSchemaMap,
   RunJournal,
@@ -78,6 +78,11 @@ export type Flow<Events extends EventSchemaMap = EventSchemaMap> = {
     input: unknown,
     options?: { replayOf?: string; parentRunId?: string | null; idempotencyKey?: string },
   ): Promise<{ runId: string; deduplicated: boolean }>
+  startDurableAll(
+    definition: DurableWorkflow<WorkflowRuntime, StandardSchemaV1, unknown>,
+    inputs: unknown[],
+    options?: { parentRunId?: string | null },
+  ): Promise<{ runId: string; deduplicated: boolean }[]>
 }
 
 const developmentObserver = (): RunObserver => {
@@ -218,6 +223,22 @@ export const sagaflow: {
           : []
 
         return { ...run, steps }
+      },
+      startDurableAll: async (definition, inputs, batchOptions) => {
+        announce()
+        if (!config.launcher) {
+          throw new Error(
+            `"${definition.name}" is durable, so starting it needs a launcher: pass one to sagaflow({ launcher })`,
+          )
+        }
+
+        return startDurableWorkflows({
+          launcher: config.launcher,
+          definition,
+          inputs,
+          ctx: runtime,
+          parentRunId: batchOptions?.parentRunId ?? null,
+        })
       },
       startDurable: async (definition, input, options) => {
         announce()

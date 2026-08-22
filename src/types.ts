@@ -469,6 +469,14 @@ export type DurableWorkflowParams = {
 /** Structurally a Cloudflare Workflow binding, narrowed to the one thing a launcher does. */
 export type WorkflowLauncher = {
   create: (options: { id?: string; params?: DurableWorkflowParams }) => Promise<{ id: string }>
+  /**
+   * Many at once, when the platform can. Creating a hundred instances one call at a time is a
+   * hundred round trips against a rate limit that is counted per second — which is the shape a
+   * fan-out has. Optional, and feature-detected: a binding without it still works, one call each.
+   */
+  createBatch?: (
+    instances: { id?: string; params?: DurableWorkflowParams }[],
+  ) => Promise<{ id: string }[]>
 }
 
 export type DurableWorkflowEnv = { WORKFLOWS: WorkflowLauncher }
