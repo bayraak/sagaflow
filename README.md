@@ -79,32 +79,85 @@ Every example in this README is compiled and executed by the test suite
 
 ---
 
-## Why
+## The problem
 
-You already know how to write the happy path. What costs you weekends is everything around it:
+A backend mutation rarely touches one thing. "Save the invoice" is a row, a counter, a file, an
+email and an event.
 
-- **Undoing half a mutation.** The charge went through, the shipment did not, and something has
-  to refund the charge — in the right order, even when one of the undos itself fails.
-- **Explaining what happened.** Three weeks later somebody asks why customer 4021 was invoiced
-  twice, and the only record is a log line that has rotated away.
-- **Announcing it exactly once.** The mutation committed and the queue was down, so either the
-  caller was told its committed work failed, or the audit trail quietly vanished.
-- **The same request twice.** A retry, a double-click, a cron that fired twice.
+- When the **third write fails**, the first two have already happened.
+- When the request is **retried**, they happen twice.
+- When it **succeeds**, nobody can later say what ran, in which order, under whose hand.
+- And the event that should announce it is either sent **before** the commit (lying) or **after**
+  it (lost on a crash).
 
-Cloudflare Workflows gives you durability — checkpoints, retries, sleeps that survive a deploy.
-It does not give you compensation, a run record you can query, an outbox, or any way to run the
-same definition inline inside a request. sagaflow is those four things, and it runs with or
-without a durable platform underneath.
+Databases solved this inside one store decades ago: transactions, a write-ahead log, unique
+constraints, a replication log. The distributed write path of an application has no equivalent.
+So teams hand-roll try/catch cleanup, or adopt a durable-execution platform for every write and
+pay instance latency and a second system of record for a 5 ms update.
 
-**Transactions for the distributed write path.** The analogy is exact:
+### What sagaflow is
 
-| A database has    | sagaflow has                              |
-| ----------------- | ----------------------------------------- |
-| write-ahead log   | the run record and its step trail         |
-| rollback          | compensation, in reverse completion order |
-| commit            | the `finish-run` batch                    |
-| replication log   | the outbox                                |
-| unique constraint | the idempotency key                       |
+**The transaction layer for the application write path.** Every mutation becomes a **run**:
+
+> validated input → steps that each declare their undo → one atomic finish that records the
+> outcome **and** queues the run's events → delivery at least once, deduplicated by id.
+
+The same definition executes **inline** inside the request — microseconds of overhead, no
+instance, no platform — or **durably** on a workflow engine (Cloudflare Workflows today) when it
+sleeps, waits, fans out, calls the outside world, or must survive a crash.
+
+The run record and the outbox are rows in **your own database**.
+
+The analogy is exact:
+
+| A database has    | sagaflow has                         |
+| ----------------- | ------------------------------------ |
+| write-ahead log   | the run record and its step trail    |
+| rollback          | compensation, in reverse start order |
+| commit            | the `finish-run` batch               |
+| replication log   | the outbox                           |
+| unique constraint | the idempotency key                  |
+
+---
+
+## Exactly what it guarantees
+
+Six promises, each one proved by a test you can read:
+
+| #   | Guarantee                                                                                                                                                                                                                                                              | Proved by                                                                                                                                                     |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | A step's effect is at most **one atomic write**; cross-step consistency is the compensation chain — run in **reverse start order**, **every** undo attempted, and the result written down as `compensated` (fully reversed) or `failed` (something is still standing). | [`engine.compensation`](./test/engine.compensation.test.ts) · [`engine.unwinding`](./test/engine.unwinding.test.ts) · [`parallel`](./test/parallel.test.ts)   |
+| 2   | A run is `completed` **if and only if** its events are durably queued — one atomic batch. "Completed with its audit trail lost" is not a representable state.                                                                                                          | [`outbox`](./test/outbox.test.ts) · [`journal-failure`](./test/journal-failure.test.ts)                                                                       |
+| 3   | Events are delivered **at least once** and are recognisable by a **deterministic id**, so a consumer sees each one once; a re-invoked durable body writes its events **once**.                                                                                         | [`engine.replay`](./test/engine.replay.test.ts) · [`engine.reinvocation`](./test/engine.reinvocation.test.ts) · [`outbox.sweep`](./test/outbox.sweep.test.ts) |
+| 4   | An idempotency key is **held** by running and completed runs and **released** by failed, compensated and cancelled ones — per tenant. The same work asked twice is answered once; work that fell over can be asked for again.                                          | [`idempotency`](./test/idempotency.test.ts) · [`idempotency.released`](./test/idempotency.released.test.ts)                                                   |
+| 5   | Every run ends in exactly one of `completed \| compensated \| failed \| cancelled`. Inline runs that die mid-request are swept to `failed`; cancellation is cooperative and compensates.                                                                               | [`cancellation`](./test/cancellation.test.ts) · [`sweep`](./test/sweep.test.ts)                                                                               |
+| 6   | Every step has a **stable idempotency key** for the outside world; inputs and outputs are validated by **your own** schema library.                                                                                                                                    | [`step-idempotency-key`](./test/step-idempotency-key.test.ts) · [`schema`](./test/schema.test.ts) · [`output-schema`](./test/output-schema.test.ts)           |
+
+And the honest small print:
+
+| Property                              | Guarantee                                                                                                     |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Run closed **and** its events written | **Atomic** — one write                                                                                        |
+| Event delivery to your sink           | **At-least-once** — the drain is best effort, a sweeper carries the rest, consumers dedupe on the envelope id |
+| Envelope ids                          | **Deterministic** — `${runId}:${ordinal}`                                                                     |
+| Step effects on retry                 | **Your call, with help** — we cannot make someone else's API exactly-once                                     |
+| Cancellation                          | **Cooperative** — at the next step boundary; a step already running is never interrupted                      |
+| Durable replay                        | **Steps memoised by name** — never reshape a deployed durable workflow                                        |
+
+There is no exactly-once delivery here, and nobody else has one either. What there is: an
+identity on every message and an outbox that never loses one.
+
+### What it is not
+
+- **Not a durable-execution engine.** It rides one when you want durability.
+- **Not a state machine or state-management library.** A run is a trivial linear machine and
+  steps are a log, not a graph.
+- **Not a job queue.** No fan-out scheduling, no backpressure.
+- **Not a platform or a dashboard.** There is no service to run and nothing to log into.
+- **No isolation between concurrent sagas** beyond what your own steps enforce. Two runs touching
+  the same row race exactly as two requests would; use your database's constraints and locks.
+- **No flow control** — no per-tenant concurrency limits, throttling or debouncing (see below for
+  what to reach for instead).
 
 ---
 
@@ -130,29 +183,9 @@ flowchart LR
   E --> G[consumer]
   F --> G
   G -->|dedupes on envelope id| H[audit / notifications / analytics]
-  C -. any step throws .-> I["undo 3, undo 2, undo 1<br/>reverse completion order"]
+  C -. any step throws .-> I["undo 3, undo 2, undo 1<br/>reverse start order"]
   I --> J["finish-run<br/>status compensated + workflow.compensated"]
 ```
-
----
-
-## Guarantees
-
-Say which is which, out loud, so nobody has to guess:
-
-| Property                              | Guarantee                              | What that means                                                                                                                    |
-| ------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Run closed **and** its events written | **Atomic**                             | One write. "Completed, audit trail lost" is not a representable state.                                                             |
-| Event delivery to your sink           | **At-least-once**                      | The drain is best effort; a sweeper carries whatever it could not. Consumers dedupe on the envelope id.                            |
-| Envelope ids                          | **Deterministic**                      | `${runId}:${ordinal}`. Re-invoking a run produces the same ids, so a repeat is recognisable.                                       |
-| Same idempotency key, twice           | **Answered, not re-run**               | While a run holds the key. A run that failed, compensated or was cancelled releases it.                                            |
-| Step effects on retry                 | **Your call, with help**               | `ctx.idempotencyKey` is stable across attempts and replays. Hand it to a provider; we cannot make someone else's API exactly-once. |
-| Compensation                          | **Every registered undo is attempted** | In reverse completion order. If one refuses, the rest still run and the run closes `failed`, not `compensated`.                    |
-| Cancellation                          | **Cooperative**                        | Takes effect at the next step boundary. A step already running is never interrupted.                                               |
-| Durable replay                        | **Steps memoised by name**             | The body re-runs; completed steps do not. Never reshape a deployed durable workflow — see [versioning](./docs/versioning.md).      |
-
-There is no exactly-once delivery here, and nobody else has one either. What there is: an
-identity on every message and an outbox that never loses one.
 
 ---
 
@@ -232,6 +265,11 @@ When `ship-order` throws, the run undoes what it did and writes down every leg o
 
 and the run closes `compensated`. Had the refund itself refused, the run would close **failed**
 — because `compensated` tells a reader the customer was left whole, and they were not.
+
+Undos run in reverse **start** order. Under `Promise.all` that is not the same as reverse
+completion order, and start order is the one that is stable: a durable re-invocation answers
+completed steps from the journal instantly, so they finish in the order they were called and a
+completion-ordered unwind would differ between the first invocation and the second.
 
 ---
 
@@ -486,7 +524,52 @@ it to an agent. The durable engine is the platform's. The sweepers are your cron
 | **A job queue**           | Fan-out, backpressure, retries                                                 | Ordered undo, atomic outbox, per-tenant idempotency, a queryable trail       |
 | **try/catch by hand**     | Nothing to learn                                                               | The undo order, the trail, the outbox and the dedupe you were about to write |
 
+### Why not Cloudflare's rollbacks?
+
+Cloudflare Workflows now ships native rollbacks — `step.do(name, fn, { rollback, rollbackConfig })`,
+unwound in reverse step-start order, plus `terminate({ rollback: true })`. If durable instances are
+all you have, that may be all you need.
+
+|                        | Cloudflare rollbacks   | sagaflow                                                                                                |
+| ---------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------- |
+| Where it works         | Durable instances only | Inline in a request **and** durably                                                                     |
+| Where the record lives | Their system           | Rows in your database — query, join, back up, expose                                                    |
+| Domain events          | None                   | Transactional outbox, written in the closing batch                                                      |
+| Deduplication          | Instance-id uniqueness | Per-tenant keys, held by running and completed runs, released by the rest                               |
+| Outcome vocabulary     | `Errored`              | `completed` / `compensated` / `failed` / `cancelled`, with every undo attempted and its result recorded |
+| Where you can run it   | Cloudflare             | Any runtime, any journal, millisecond tests with no platform at all                                     |
+
+Note that `terminate({ rollback: true })` runs **Cloudflare's** rollbacks, not sagaflow's
+compensations — it terminates the instance out from under the engine. Use `requestCancellation`,
+which unwinds through the same compensation chain and closes the run record honestly.
+
+> Cloudflare gave durable workflows an undo. sagaflow gives every mutation a record, an undo, an
+> idempotency key and an announcement — whether or not it is a Workflow instance.
+
 Longer and fairer: [`docs/comparison.md`](./docs/comparison.md).
+
+---
+
+## For agents
+
+sagaflow is the transactional substrate the agent papers keep re-inventing — it does not plan,
+validate reasoning, or manage context; it makes every action an agent takes recorded, undoable,
+idempotent and announced once.
+
+An agent taking actions on a real system has the same problem a backend does, only louder: it
+will retry, it will be interrupted, and somebody will ask afterwards what it did.
+
+- **Every agent action is a step** that declares its own undo, so a half-finished plan can be
+  reversed rather than explained.
+- **Every step has a stable idempotency key**, so an action retried after a lost acknowledgement
+  is one action and not two.
+- **Irreversible actions become proposals** — a step that writes a proposal is undoable; a step
+  that sends the email is not. Put the point of no return last, and let the run record show
+  everything that led to it.
+- **Run records are readable**, in your own tables, so an agent can be asked "what happened to
+  invoice 4021" and answer from rows rather than from memory.
+
+[`SKILL.md`](./SKILL.md) is written for coding agents working in a sagaflow codebase.
 
 ---
 
@@ -530,6 +613,7 @@ that did not happen is not announced. The run's own `workflow.compensated` is wh
 - [`examples/bun-inline`](./examples/bun-inline) — a plain Bun HTTP server, no Cloudflare anywhere
 - [`examples/cloudflare-worker`](./examples/cloudflare-worker) — inline and durable, on Workers
 - [`examples/with-valibot`](./examples/with-valibot) — the same, with Valibot instead of Zod
+- [`examples/agent-tools`](./examples/agent-tools) — MCP-style tools: reads run, writes propose
 
 ## License
 
