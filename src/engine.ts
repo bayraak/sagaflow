@@ -8,12 +8,14 @@ import {
   type RawEvent,
 } from './events'
 import { dispatchEvents } from './outbox'
+import { validate } from './schema'
 import { defaultStepConfig } from './step'
 import type {
   CompensationOutcome,
   EmitFn,
   EventEnvelope,
   EventsOf,
+  StandardSchemaV1,
   StepContext,
   StepRetryConfig,
   WorkflowHandle,
@@ -40,6 +42,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   ctx: Ctx
   runner: StepRunner
   invoke: (handle: WorkflowHandle<Ctx>) => Promise<Output>
+  output?: StandardSchemaV1
 }): Promise<Output> => {
   const { name, runId, ctx, runner, invoke } = options
   const held: EventEnvelope[] = []
@@ -228,7 +231,18 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
 
   let output: Output
   try {
-    output = await invoke(handle)
+    const produced = await invoke(handle)
+
+    /*
+     * A body that returns the wrong thing is a body that failed, however cheerfully it
+     * returned: the run promised its caller a shape, and this is the last honest moment to
+     * notice that it did not keep the promise. So a refusal here goes down the same path as a
+     * step that threw — the run is undone and closed as compensated, not written down as
+     * completed with a value nobody can use.
+     */
+    output = options.output
+      ? ((await validate(options.output, produced, `the output of ${name}`)) as Output)
+      : produced
   } catch (error) {
     const undone = await compensate()
 

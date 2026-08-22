@@ -39,5 +39,6 @@ export const executeDurable = async <
 
       return definition.body(parsed, durable)
     },
+    ...(definition.output === undefined ? {} : { output: definition.output }),
   })
 }

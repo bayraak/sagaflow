@@ -20,6 +20,7 @@ export type InlineWorkflow<Ctx extends WorkflowRuntime, Input extends StandardSc
   name: string
   execution: 'inline'
   input: Input
+  output?: StandardSchemaV1
   idempotency?: (input: StandardSchemaV1.InferOutput<Input>) => string
   body: (input: StandardSchemaV1.InferOutput<Input>, wf: WorkflowHandle<Ctx>) => Promise<Output>
   run: (options: { input: unknown; ctx: Ctx }) => Promise<InlineRunResult<Output>>
@@ -29,6 +30,7 @@ export type DurableWorkflow<Ctx extends WorkflowRuntime, Input extends StandardS
   name: string
   execution: 'durable'
   input: Input
+  output?: StandardSchemaV1
   idempotency?: (input: StandardSchemaV1.InferOutput<Input>) => string
   body: (
     input: StandardSchemaV1.InferOutput<Input>,
@@ -44,7 +46,32 @@ export type AnyWorkflow<Ctx extends WorkflowRuntime> =
  * An inline definition can run itself — the caller that asked for it is still holding the
  * request open. A durable one cannot: it is started, and an instance runs it later. These two
  * overloads are what make that difference a compile error instead of a convention.
+ *
+ * Declaring `output` makes the body's return type the schema's, checked at compile time and
+ * validated again before the run closes.
  */
+export function defineWorkflow<
+  Ctx extends WorkflowRuntime,
+  Input extends StandardSchemaV1,
+  Out extends StandardSchemaV1,
+>(
+  config: WorkflowConfig<Input, 'inline'> & { output: Out },
+  body: (
+    input: StandardSchemaV1.InferOutput<Input>,
+    wf: WorkflowHandle<Ctx>,
+  ) => Promise<StandardSchemaV1.InferInput<Out>>,
+): InlineWorkflow<Ctx, Input, StandardSchemaV1.InferOutput<Out>>
+export function defineWorkflow<
+  Ctx extends WorkflowRuntime,
+  Input extends StandardSchemaV1,
+  Out extends StandardSchemaV1,
+>(
+  config: WorkflowConfig<Input, 'durable'> & { output: Out },
+  body: (
+    input: StandardSchemaV1.InferOutput<Input>,
+    wf: DurableWorkflowHandle<Ctx>,
+  ) => Promise<StandardSchemaV1.InferInput<Out>>,
+): DurableWorkflow<Ctx, Input, StandardSchemaV1.InferOutput<Out>>
 export function defineWorkflow<Ctx extends WorkflowRuntime, Input extends StandardSchemaV1, Output>(
   config: WorkflowConfig<Input, 'inline'>,
   body: (input: StandardSchemaV1.InferOutput<Input>, wf: WorkflowHandle<Ctx>) => Promise<Output>,
@@ -57,7 +84,7 @@ export function defineWorkflow<Ctx extends WorkflowRuntime, Input extends Standa
   ) => Promise<Output>,
 ): DurableWorkflow<Ctx, Input, Output>
 export function defineWorkflow<Ctx extends WorkflowRuntime, Input extends StandardSchemaV1, Output>(
-  config: WorkflowConfig<Input, WorkflowExecution>,
+  config: WorkflowConfig<Input, WorkflowExecution> & { output?: StandardSchemaV1 },
   body: (
     input: StandardSchemaV1.InferOutput<Input>,
     wf: DurableWorkflowHandle<Ctx>,
@@ -68,6 +95,7 @@ export function defineWorkflow<Ctx extends WorkflowRuntime, Input extends Standa
       name: config.name,
       execution: 'durable',
       input: config.input,
+      output: config.output,
       idempotency: config.idempotency,
       body,
     }
@@ -85,6 +113,7 @@ export function defineWorkflow<Ctx extends WorkflowRuntime, Input extends Standa
     name: config.name,
     execution: 'inline',
     input: config.input,
+    output: config.output,
     idempotency: config.idempotency,
     body: inlineBody,
     run: async ({ input, ctx }) => {
@@ -129,6 +158,7 @@ export function defineWorkflow<Ctx extends WorkflowRuntime, Input extends Standa
         // cannot finish now should compensate and say so rather than spend the budget.
         runner: (_name, _config, run) => run({ attempt: 1 }),
         invoke: (handle) => inlineBody(parsed, handle),
+        ...(config.output === undefined ? {} : { output: config.output }),
       })
 
       return { runId, output, deduplicated: false }
