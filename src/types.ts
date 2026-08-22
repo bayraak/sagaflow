@@ -242,3 +242,23 @@ export type StepPrimitive = {
 export type InlineRunResult<Output> =
   | { runId: string; output: Output; deduplicated: false }
   | { runId: string; output: unknown; status: RunStatus; deduplicated: true }
+
+/**
+ * The event a durable instance is created with. A host types its workflow binding with this,
+ * so the dispatcher and the launcher can never disagree about what an instance is started
+ * with.
+ */
+export type DurableWorkflowParams = {
+  name: string
+  tenantId: string
+  actor: string | null
+  input: unknown
+  runId: string
+}
+
+/** Structurally a Cloudflare Workflow binding, narrowed to the one thing a launcher does. */
+export type WorkflowLauncher = {
+  create: (options: { id?: string; params?: DurableWorkflowParams }) => Promise<{ id: string }>
+}
+
+export type DurableWorkflowEnv = { WORKFLOWS: WorkflowLauncher }

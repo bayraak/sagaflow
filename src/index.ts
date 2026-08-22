@@ -9,11 +9,15 @@ export { executeRun, type StepRunner } from './engine'
 export { messageOf, WorkflowError } from './errors'
 export { lifecycleEventTypes, workflowCompletedEvent } from './events'
 export { dispatchEvents, eventBatchLimit } from './outbox'
+export { createDurableRegistry, registerDurableWorkflow, type RegisteredWorkflow } from './registry'
 export { SchemaError } from './schema'
 export { createStep, defaultStepConfig, namedStep } from './step'
+export { durableInstanceId, startDurableWorkflow } from './start'
 export type {
   CompensationOutcome,
+  DurableWorkflowEnv,
   DurableWorkflowHandle,
+  DurableWorkflowParams,
   EmitFn,
   EventEnvelope,
   EventSchemaMap,
@@ -33,5 +37,6 @@ export type {
   StepStatus,
   WorkflowExecution,
   WorkflowHandle,
+  WorkflowLauncher,
   WorkflowRuntime,
 } from './types'
