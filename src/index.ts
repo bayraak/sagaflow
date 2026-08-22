@@ -4,6 +4,7 @@ export {
   type DurableWorkflow,
   type InlineWorkflow,
 } from './define'
+export { executeDurable } from './durable'
 export { executeRun, type StepRunner } from './engine'
 export { messageOf, WorkflowError } from './errors'
 export { lifecycleEventTypes, workflowCompletedEvent } from './events'

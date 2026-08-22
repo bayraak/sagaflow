@@ -1,11 +1,12 @@
 import type { WorkflowRuntime } from '../../src/index'
 import { createMemoryJournal, createMemorySink } from '../../src/memory/index'
+import { testEventSchemas, type TestEventSchemas } from './events'
 
-// Everything a suite needs to watch a run: the seams the engine writes through, plus a log
-// of what the step bodies actually did. The invocation log is the only way to tell "the step
-// ran and was undone" apart from "the step never ran", and that distinction is most of what
-// a saga has to get right.
-export type TestRuntime = WorkflowRuntime & { invocations: string[] }
+// Everything a suite needs to watch a run: the seams the engine writes through, plus a log of
+// what the step bodies actually did. The invocation log is the only way to tell "the step ran
+// and was undone" apart from "the step never ran", and that distinction is most of what a
+// saga has to get right.
+export type TestRuntime = WorkflowRuntime<TestEventSchemas> & { invocations: string[] }
 
 export const createTestRuntime = (options: { sinkRefuses?: boolean } = {}) => {
   const journal = createMemoryJournal()
@@ -17,6 +18,7 @@ export const createTestRuntime = (options: { sinkRefuses?: boolean } = {}) => {
     actor: 'tester',
     journal: journal.journal,
     events: sink.sink,
+    eventSchemas: testEventSchemas,
     invocations,
   }
 
