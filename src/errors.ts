@@ -3,6 +3,21 @@ import type { CompensationOutcome } from './types'
 export const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
+const describeFailure = (params: {
+  workflowName: string
+  stepName: string | null
+  outcome: CompensationOutcome
+  cause: unknown
+}): string => {
+  const where = params.stepName ?? 'its body'
+
+  if (params.outcome === 'cancelled') {
+    return `workflow ${params.workflowName} was cancelled at ${where} and was fully undone`
+  }
+
+  return `workflow ${params.workflowName} failed at ${where} and ${params.outcome === 'compensated' ? 'was compensated' : 'could not be fully compensated'}: ${messageOf(params.cause)}`
+}
+
 /**
  * What a failed run throws. It carries the run id because the run record — not the stack — is
  * where the failure is explained: input, step trail, compensation trail, timings.
@@ -20,10 +35,7 @@ export class WorkflowError extends Error {
     outcome: CompensationOutcome
     cause: unknown
   }) {
-    super(
-      `workflow ${params.workflowName} failed at ${params.stepName ?? 'its body'} and ${params.outcome === 'compensated' ? 'was compensated' : 'could not be fully compensated'}: ${messageOf(params.cause)}`,
-      { cause: params.cause },
-    )
+    super(describeFailure(params), { cause: params.cause })
 
     this.name = 'WorkflowError'
     this.runId = params.runId

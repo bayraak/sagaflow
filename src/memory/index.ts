@@ -15,6 +15,7 @@ export type MemoryRunRow = {
   idempotencyKey: string | null
   input: unknown
   status: RunStatus
+  cancelRequested: boolean
   output?: unknown
   error?: string | null
 }
@@ -55,6 +56,9 @@ export const createMemoryJournal = () => {
   // A run that failed, compensated or was cancelled RELEASES its key, because the work it was
   // asked to do did not happen and asking again is the only way to get it done. A table
   // enforces the same rule with a partial unique index; see src/d1/schema.sql.
+  const runOf = (tenantId: string, runId: string) =>
+    runs.find((run) => run.tenantId === tenantId && run.id === runId)
+
   const heldRun = (tenantId: string, idempotencyKey: string) =>
     runs.find(
       (run) =>
@@ -71,12 +75,28 @@ export const createMemoryJournal = () => {
       if (claimed) throw new Error('the idempotency key is already held')
 
       const id = `run_${runs.length + 1}`
-      runs.push({ id, status: 'running', ...params })
+      runs.push({ id, status: 'running', cancelRequested: false, ...params })
 
       return id
     },
     recordStep: async (params) => {
-      steps.push({ ...params })
+      const written = steps.some(
+        (step) =>
+          step.runId === params.runId && step.seq === params.seq && step.attempt === params.attempt,
+      )
+      if (!written) steps.push({ ...params })
+
+      const run = runOf(params.tenantId, params.runId)
+
+      return { cancellationRequested: run?.cancelRequested ?? false }
+    },
+    requestCancellation: async (params) => {
+      const run = runOf(params.tenantId, params.runId)
+      if (!run || run.status !== 'running') return false
+
+      run.cancelRequested = true
+
+      return true
     },
     finishRun: async (params) => {
       finishes.push({

@@ -1,3 +1,4 @@
+import { WorkflowCancelledError } from './cancel'
 import { messageOf, WorkflowError } from './errors'
 import {
   createEnvelope,
@@ -46,6 +47,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   let seq = 0
   let ordinal = 0
   let failedStep: string | null = null
+  let cancelledAfter: string | null = null
 
   /*
    * Envelope ids are the run and a counter, so the whole set is a function of the run rather
@@ -98,6 +100,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     step: async (step, input) => {
       const current = seq
       seq += 1
+      let cancellationRequested = false
 
       /*
        * What a step emitted is part of what a step produced, so it travels home in the step's
@@ -116,7 +119,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
             input,
             contextFor(`${runId}:${current}`, (event) => emitted.push(event)),
           )
-          await ctx.journal.recordStep({
+          const recorded = await ctx.journal.recordStep({
             tenantId: ctx.tenantId,
             runId,
             seq: current,
@@ -125,6 +128,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
             attempt,
             output: produced.output,
           })
+          cancellationRequested = recorded.cancellationRequested
 
           return { ...produced, events: emitted }
         } catch (error) {
@@ -162,6 +166,15 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
         })
       }
 
+      // Noticed only now, and acted on only here: a step already running is never interrupted,
+      // and the undo of the step that just finished is registered above before this throws, so
+      // a cancelled run leaves nothing standing.
+      if (cancellationRequested) {
+        cancelledAfter = step.name
+
+        throw new WorkflowCancelledError(runId)
+      }
+
       return result.output
     },
   }
@@ -169,8 +182,8 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   // Backwards, because a saga undoes what it did in the order it did it — and every undo is
   // attempted even when an earlier one refuses, so no completed step is left standing just
   // because its neighbour could not be reversed.
-  const compensate = async (): Promise<CompensationOutcome> => {
-    let outcome: CompensationOutcome = 'compensated'
+  const compensate = async (): Promise<'compensated' | 'failed'> => {
+    let outcome: 'compensated' | 'failed' = 'compensated'
 
     for (let index = undos.length - 1; index >= 0; index -= 1) {
       const undo = undos[index]
@@ -217,7 +230,14 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   try {
     output = await invoke(handle)
   } catch (error) {
-    const outcome = await compensate()
+    const undone = await compensate()
+
+    // Somebody changing their mind and something breaking are different facts, and a run that
+    // was asked to stop and came all the way back is `cancelled`. If an undo refused, it is
+    // `failed` like any other run that left something standing — calling that one cancelled
+    // would tell a reader the tenant was left whole.
+    const outcome: CompensationOutcome =
+      error instanceof WorkflowCancelledError && undone === 'compensated' ? 'cancelled' : undone
 
     /*
      * What the body held is dropped with the run: a compensated run never happened, so nothing
@@ -248,7 +268,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     throw new WorkflowError({
       runId,
       workflowName: name,
-      stepName: failedStep,
+      stepName: failedStep ?? cancelledAfter,
       outcome,
       cause: error,
     })

@@ -51,7 +51,7 @@ export declare namespace StandardSchemaV1 {
 
 export type WorkflowExecution = 'durable' | 'inline'
 
-export type RunStatus = 'compensated' | 'completed' | 'failed' | 'running'
+export type RunStatus = 'cancelled' | 'compensated' | 'completed' | 'failed' | 'running'
 
 /** How a run ended. `running` is the only status that is not an ending. */
 export type RunOutcome = Exclude<RunStatus, 'running'>
@@ -116,7 +116,13 @@ export type RunJournal = {
     /** The run this one was started to do again, when it is one. Null for nearly every run. */
     replayOf?: string | null
   }) => Promise<string>
-  /** Idempotent on `(runId, seq, attempt)` — a retried step writes one row, not two. */
+  /**
+   * Idempotent on `(runId, seq, attempt)` — a retried step writes one row, not two.
+   *
+   * Answers with the run's cancellation flag, in the SAME round trip that writes the step.
+   * Cooperative cancellation is then free: the engine already had to talk to the journal here,
+   * so noticing that somebody asked the run to stop costs nothing extra.
+   */
   recordStep: (params: {
     tenantId: string
     runId: string
@@ -126,7 +132,7 @@ export type RunJournal = {
     attempt: number
     output?: unknown
     error?: string | null
-  }) => Promise<void>
+  }) => Promise<{ cancellationRequested: boolean }>
   /**
    * ONE atomic write. Closing the run and writing down the events it emitted are one call
    * because they are one batch underneath: a run is completed if and only if its events are
@@ -146,6 +152,11 @@ export type RunJournal = {
    * survivable — the sweeper re-sends, and the consumer recognises the message by its id.
    */
   markEventsDispatched: (params: { tenantId: string; ids: string[] }) => Promise<void>
+  /**
+   * Raise the cancellation flag on a run. MUST answer true only if the run was `running` —
+   * a run that has already ended cannot be stopped.
+   */
+  requestCancellation: (params: { tenantId: string; runId: string }) => Promise<boolean>
   /** Held runs only, by the same rule `insertRun` refuses by. */
   findRunByIdempotencyKey: (params: {
     tenantId: string
