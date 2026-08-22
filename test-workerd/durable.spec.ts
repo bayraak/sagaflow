@@ -121,20 +121,25 @@ describe('a compensated run on real D1', () => {
 
   it('removes what the completed step wrote and says so', async () => {
     const response = await SELF.fetch('https://sagaflow.test/inline-bad?mark=DOOMED')
-    const body = (await response.json()) as { runId: string; outcome: string }
+    const body = (await response.json()) as {
+      ok: boolean
+      error?: { runId: string; outcome: string; failedStep: string }
+    }
 
-    expect(body.outcome).toBe('compensated')
+    expect(body.ok).toBe(false)
+    expect(body.error?.outcome).toBe('compensated')
+    expect(body.error?.failedStep).toBe('refuse')
 
     const run = await first<{ status: string; error: string }>(
       'select status, error from saga_runs where id = ?',
-      body.runId,
+      body.error?.runId,
     )
     expect(run?.status).toBe('compensated')
     expect(run?.error).toContain('this step always refuses')
 
     const steps = await all<{ name: string; status: string }>(
       'select name, status from saga_run_steps where run_id = ? order by seq',
-      body.runId,
+      body.error?.runId,
     )
     expect(steps).toEqual([
       { name: 'write-thing', status: 'completed' },
@@ -147,7 +152,7 @@ describe('a compensated run on real D1', () => {
 
     const events = await all<{ type: string }>(
       'select type from saga_outbox where run_id = ?',
-      body.runId,
+      body.error?.runId,
     )
     expect(events.map((event) => event.type)).toEqual(['workflow.compensated'])
   })

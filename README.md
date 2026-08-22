@@ -297,6 +297,29 @@ const placeOrder = saga('order.place', async (input: { customerId: string; amoun
 })
 ```
 
+### What belongs in a step
+
+**Steps are for effects, and for anything you want in the record.** A pure check over data you
+already hold can be plain code — if it throws, the run compensates and the error says why:
+
+```ts
+const placeOrder = saga('order.place', async (input: { seat: string; card: Card }) => {
+  // Plain code. Throws, the run compensates, and the message is in the run record.
+  if (!isEligible(input.card)) throw new Error('this card cannot be used for seat reservations')
+
+  // A step, because it touches the world — and because you want it in the trail.
+  await step(
+    'reserve',
+    () => seats.reserve(input.seat),
+    (held) => seats.release(held.id),
+  )
+})
+```
+
+Wrap a pure check in `step()` only when you want it named in the trail, which is a real reason —
+"which check refused" is often the question. Anything that touches the world — a query, a write,
+a provider, a queue — is a step.
+
 **One rule about undo data: the undo is handed exactly what the step returned.** A step that
 needs something extra to undo itself returns it, and then its value says everything about what it
 did — which is also what the run record holds and what the body was given.

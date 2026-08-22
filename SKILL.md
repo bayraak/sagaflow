@@ -43,6 +43,11 @@ import {
    receives **exactly what the step returned** — one rule, no second channel. A reusable step is
    a plain function that calls `step()`; there is no separate constructor.
 
+   **What belongs in a step:** effects, and anything you want in the record. A pure check over
+   data you already hold can be plain code — if it throws, the run compensates and the error says
+   why; wrap it in `step()` only when you want it named in the trail. Anything that touches the
+   world (a query, a write, a provider) is a step.
+
 2. **Choose the executor.** `durable: true` if it sleeps, waits, fans out, touches the outside
    world, takes more than roughly a second, or must survive a crash. Inline is the default and is
    what most mutations are.
