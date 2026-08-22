@@ -12,6 +12,16 @@ workflow engine. Cloudflare Workflows adapter included.
 
 Zero runtime dependencies. Your database, your tables, your process.
 
+**Make every write a saga.** Not the occasional long-running job — every write. That is only a
+reasonable thing to ask if it is cheap and if the promises are checkable, so both are on the
+table: the [cost](#exactly-what-it-guarantees) in journal round trips, the
+[six guarantees](#exactly-what-it-guarantees) each linked to the test that proves it, and the
+same definition running durably on a platform when a write needs to survive a crash. The engine
+was extracted from a production backend where 57 workflows carry every mutation it makes.
+
+The thing this actually competes with is not a platform. It is the `try`/`catch` cleanup block
+you were about to write, and the `await queue.send()` on the line after the commit.
+
 ---
 
 ## Sixty seconds
@@ -533,16 +543,50 @@ it to an agent. The durable engine is the platform's. The sweepers are your cron
 
 ## Why not X
 
-|                            | What it does that sagaflow does not                                            | What sagaflow does that it does not                                                              |
-| -------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| **Temporal**               | Deterministic replay, signals/queries, child workflows, a UI, decades of scale | Runs inline in a request; no cluster; no dependencies; your tables                               |
-| **Restate**                | Durable promises, virtual objects, its own runtime                             | No server to run; inline mode; compensation as a first-class concept                             |
-| **Inngest / Trigger.dev**  | Hosted platform, dashboards, flow control, scheduling                          | Library not platform; no vendor in the write path; your run records                              |
-| **Cloudflare Workflows**   | Durability, checkpoints, retries, sleeps that survive deploys                  | Compensation, a run record you own, a transactional outbox, inline mode                          |
-| **DBOS Transact**          | In-process runs that resume after a crash, on your own Postgres                | First-class compensation, an outbox, an inline mode with no durability machinery, more than Node |
-| **Vercel Workflow DevKit** | `"use workflow"` ergonomics, portable Worlds, a hosted story                   | An inline mode, an outbox for your own domain events, your tables, zero deps                     |
-| **A job queue**            | Fan-out, backpressure, retries                                                 | Ordered undo, atomic outbox, per-tenant idempotency, a queryable trail                           |
-| **try/catch by hand**      | Nothing to learn                                                               | The undo order, the trail, the outbox and the dedupe you were about to write                     |
+Two structural differences run through all of these, and neither is about how mature anybody is.
+
+**The object of design.** sagaflow models **every mutation**. The platforms model **the
+occasional workflow** — the thing worth an instance, a dashboard row and a few hundred
+milliseconds of orchestration. Almost everything else here falls out of that one choice: a
+transactional outbox exists because every mutation announces something; a tenant sits in every
+row and every key because every mutation belongs to somebody; the inline executor exists because
+a 3 ms document save cannot afford an instance and still has to be undoable and recorded.
+
+**Runtime posture.** sagaflow is a zero-dependency library that runs _inside your request_, on
+any runtime including Workers, writing _your_ tables through a journal that a conformance suite
+holds to its contract. The alternatives ask for something else: a platform that runs the engine
+(Temporal, Restate, Inngest, Trigger.dev), a runtime bet (Effect), or a long-lived process
+(DBOS).
+
+**Compensation is not the differentiator any more, and pretending otherwise would be dishonest.**
+Cloudflare Workflows has rollbacks. Vercel's Workflow DevKit has compensations. Effect has
+`withCompensation`. What is different here is how precisely it is specified — reverse start
+order, _every_ undo attempted even after one refuses, four distinct outcomes, and the whole trail
+written down — not that it exists.
+
+**DBOS Transact is the nearest neighbour**, and it is a good library. Same instinct: embed the
+engine, keep the state in the user's own database, no server to run. It differs in the two axes
+above — it models durable functions rather than every mutation, it wants a long-lived Node
+process, and it does not carry an outbox or first-class compensation. Where it is ahead: an
+in-process run resumes after a crash without a platform underneath, which is a genuinely harder
+problem than anything solved here.
+
+|                                      | What it does that sagaflow does not                                             | What sagaflow does that it does not                                                                                               |
+| ------------------------------------ | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **DBOS Transact**                    | Resumes an in-process run after a crash, on your own Postgres                   | Models every mutation; a transactional outbox; an inline path with no durability machinery; any runtime, not a long-lived process |
+| **Temporal**                         | Deterministic replay, signals, queries, child workflows, a UI, decades of scale | Runs inside the request; no cluster; no dependencies; your tables                                                                 |
+| **Restate**                          | Durable promises, virtual objects, its own runtime                              | No server to run; an inline path; an outbox for your own events                                                                   |
+| **Effect workflows**                 | An entire effect system around it, with typed errors and resources throughout   | No runtime bet — plain functions, plain promises, any validator                                                                   |
+| **Inngest / Trigger.dev**            | Hosted platform, dashboards, flow control, scheduling                           | A library, not a platform; no vendor in the write path; run records you own                                                       |
+| **Vercel Workflow DevKit**           | `"use workflow"` ergonomics, portable Worlds, a hosted story                    | An inline path; an outbox for your own domain events; your tables; zero deps                                                      |
+| **Cloudflare Workflows**             | Durability, checkpoints, retries, sleeps that survive deploys                   | Compensation with a specified order and outcome, a run record you own, a transactional outbox, an inline path                     |
+| **A job queue**                      | Fan-out, backpressure, retries                                                  | Ordered undo, atomic outbox, per-tenant idempotency, a queryable trail                                                            |
+| **`try`/`catch` and `queue.send()`** | Nothing to learn                                                                | Exactly the undo order, the trail, the outbox and the dedupe you were about to write by hand                                      |
+
+**What none of them has together**: an inline path that needs no platform _and_ a durable one
+from the same definition · an outbox for your own domain events · zero dependencies · Cloudflare
+Workers and D1 _and_ any other runtime · your tables, with the tenant in every row and every key
+· a journal conformance suite so a new store can prove itself.
 
 ### Why not Cloudflare's rollbacks?
 

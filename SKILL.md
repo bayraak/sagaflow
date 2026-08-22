@@ -5,7 +5,11 @@ description: Working in a codebase that uses sagaflow — adding or changing a w
 
 # sagaflow
 
-An embedded saga engine. Every mutation is a **run**: validated input, steps that each declare
+An embedded saga engine. The point is that **every** mutation is a saga, not just the occasional
+long-running job — which is only reasonable because it is cheap (five journal round trips for a
+three-step inline run) and because the promises are checkable (six guarantees, each with a test).
+
+Every mutation is a **run**: validated input, steps that each declare
 their undo, one atomic finish that records the outcome and queues the run's events, delivery at
 least once. One definition executes **inline** in the request or **durably** on a workflow
 engine. Run records and the outbox are rows in the host application's own database.
