@@ -9,6 +9,7 @@ import type {
   RunObserver,
   EventSink,
   StandardSchemaV1,
+  TryRunResult,
   WorkflowLauncher,
   WorkflowRuntime,
 } from './types.js'
@@ -29,6 +30,12 @@ export type SagaflowScope<Events extends EventSchemaMap = EventSchemaMap> = {
     input: StandardSchemaV1.InferInput<Input>,
     options?: { parentRunId?: string | null },
   ): Promise<InlineRunResult<Output>>
+  /** The same run, answering instead of throwing. */
+  tryRun<Input extends StandardSchemaV1, Output>(
+    workflow: InlineWorkflow<WorkflowRuntime<Events>, Input, Output>,
+    input: StandardSchemaV1.InferInput<Input>,
+    options?: { parentRunId?: string | null },
+  ): Promise<TryRunResult<Output>>
   start<Input extends StandardSchemaV1, Output>(
     launcher: WorkflowLauncher,
     workflow: DurableWorkflow<WorkflowRuntime<Events>, Input, Output>,
@@ -117,6 +124,11 @@ export const createSagaflow = <Events extends EventSchemaMap = EventSchemaMap>(
           warn()
 
           return workflow.run({ input, ctx, parentRunId: options?.parentRunId ?? null })
+        },
+        tryRun: (workflow, input, options) => {
+          warn()
+
+          return workflow.tryRun({ input, ctx, parentRunId: options?.parentRunId ?? null })
         },
         start: (launcher, workflow, input, options) => {
           warn()

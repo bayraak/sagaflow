@@ -50,6 +50,28 @@ const watch = <Fact>(hook: ((fact: Fact) => void) | undefined, fact: () => Fact)
   }
 }
 
+/*
+ * Every member is started, and every member is allowed to STOP before the first rejection is
+ * reported. `Promise.all` reports the first rejection immediately and leaves the others running,
+ * which is how a step finishes a millisecond later with an undo nobody is left to run. The name
+ * is for the reader — the group is not journaled, the steps inside it are.
+ */
+const all = async <Results extends readonly unknown[]>(
+  _name: string,
+  members: { [Index in keyof Results]: () => PromiseLike<Results[Index]> },
+): Promise<Results> => {
+  const settled = await Promise.allSettled(
+    (members as ReadonlyArray<() => PromiseLike<unknown>>).map((member) => member()),
+  )
+
+  const refused = settled.find((outcome) => outcome.status === 'rejected')
+  if (refused && refused.status === 'rejected') throw refused.reason
+
+  return settled.map((outcome) =>
+    outcome.status === 'fulfilled' ? outcome.value : undefined,
+  ) as unknown as Results
+}
+
 type Undo<Ctx> = {
   seq: number
   name: string
@@ -309,7 +331,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     return running
   }
 
-  const handle: WorkflowHandle<Ctx> = { emit: bodyEmit, step: trackedStep }
+  const handle: WorkflowHandle<Ctx> = { emit: bodyEmit, step: trackedStep, all }
 
   /*
    * Backwards, by the order the steps were STARTED in — which under concurrency is not the
@@ -321,6 +343,9 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
    * Every undo is attempted even when an earlier one refuses, so no completed step is left
    * standing just because its neighbour could not be reversed.
    */
+  const compensated: string[] = []
+  const failedCompensations: string[] = []
+
   const compensate = async (cause: unknown): Promise<'compensated' | 'failed'> => {
     // Nothing is undone until everything has stopped, so that every undo there is going to be
     // is registered before the first one runs.
@@ -358,6 +383,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
               status: 'compensated',
               attempt,
             })
+            compensated.push(undo.name)
             watch(ctx.observer?.onCompensationEnd, () => ({
               runId,
               name: undo.name,
@@ -390,6 +416,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
         })
       } catch {
         outcome = 'failed'
+        failedCompensations.push(undo.name)
       }
     }
 
@@ -462,6 +489,8 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
       workflowName: name,
       stepName: failedStep ?? cancelledAfter,
       outcome,
+      compensated,
+      failedCompensations,
       cause: error,
     })
   }

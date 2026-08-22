@@ -1,10 +1,13 @@
 import { stableHash } from './canonical.js'
 import { executeRun } from './engine.js'
-import { validate } from './schema.js'
+import { WorkflowError } from './errors.js'
+import { createInlineRunner } from './retry.js'
+import { SchemaError, validate } from './schema.js'
 import type {
   DurableWorkflowHandle,
   InlineRunResult,
   StandardSchemaV1,
+  TryRunResult,
   WorkflowExecution,
   WorkflowHandle,
   WorkflowRuntime,
@@ -14,6 +17,8 @@ import type {
  * The key a run claims, or null when it claims none. Declared here rather than at each executor
  * so both derive it the same way.
  */
+const inlineRunner = createInlineRunner()
+
 export const idempotencyKeyFor = (
   name: string,
   idempotency: true | ((input: never) => string) | undefined,
@@ -28,6 +33,10 @@ export const idempotencyKeyFor = (
 type WorkflowConfig<Input extends StandardSchemaV1, Execution extends WorkflowExecution> = {
   name: string
   input: Input
+  /**
+   * Inline unless you say otherwise. Inline is what most mutations are, and durable is the
+   * decision worth writing down — so that is the one you have to write down.
+   */
   execution: Execution
   /**
    * How this run is recognised as one somebody already asked for.
@@ -52,6 +61,12 @@ export type InlineWorkflow<Ctx extends WorkflowRuntime, Input extends StandardSc
     ctx: Ctx
     parentRunId?: string | null
   }): Promise<InlineRunResult<Output>>
+  /** The same run, answering instead of throwing. */
+  tryRun(options: {
+    input: unknown
+    ctx: Ctx
+    parentRunId?: string | null
+  }): Promise<TryRunResult<Output>>
 }
 
 export type DurableWorkflow<Ctx extends WorkflowRuntime, Input extends StandardSchemaV1, Output> = {
@@ -80,7 +95,10 @@ export function defineWorkflow<
   Input extends StandardSchemaV1,
   Out extends StandardSchemaV1,
 >(
-  config: WorkflowConfig<Input, 'inline'> & { output: Out },
+  config: Omit<WorkflowConfig<Input, 'inline'>, 'execution'> & {
+    execution?: 'inline'
+    output: Out
+  },
   body: (
     input: StandardSchemaV1.InferOutput<Input>,
     wf: WorkflowHandle<Ctx>,
@@ -98,7 +116,7 @@ export function defineWorkflow<
   ) => Promise<StandardSchemaV1.InferInput<Out>>,
 ): DurableWorkflow<Ctx, Input, StandardSchemaV1.InferOutput<Out>>
 export function defineWorkflow<Ctx extends WorkflowRuntime, Input extends StandardSchemaV1, Output>(
-  config: WorkflowConfig<Input, 'inline'>,
+  config: Omit<WorkflowConfig<Input, 'inline'>, 'execution'> & { execution?: 'inline' },
   body: (input: StandardSchemaV1.InferOutput<Input>, wf: WorkflowHandle<Ctx>) => Promise<Output>,
 ): InlineWorkflow<Ctx, Input, Output>
 export function defineWorkflow<Ctx extends WorkflowRuntime, Input extends StandardSchemaV1, Output>(
@@ -109,7 +127,10 @@ export function defineWorkflow<Ctx extends WorkflowRuntime, Input extends Standa
   ) => Promise<Output>,
 ): DurableWorkflow<Ctx, Input, Output>
 export function defineWorkflow<Ctx extends WorkflowRuntime, Input extends StandardSchemaV1, Output>(
-  config: WorkflowConfig<Input, WorkflowExecution> & { output?: StandardSchemaV1 },
+  config: Omit<WorkflowConfig<Input, WorkflowExecution>, 'execution'> & {
+    execution?: WorkflowExecution
+    output?: StandardSchemaV1
+  },
   body: (
     input: StandardSchemaV1.InferOutput<Input>,
     wf: DurableWorkflowHandle<Ctx>,
@@ -134,7 +155,7 @@ export function defineWorkflow<Ctx extends WorkflowRuntime, Input extends Standa
     wf: WorkflowHandle<Ctx>,
   ) => Promise<Output>
 
-  const definition: InlineWorkflow<Ctx, Input, Output> = {
+  const definition = {
     name: config.name,
     execution: 'inline',
     input: config.input,
@@ -180,16 +201,58 @@ export function defineWorkflow<Ctx extends WorkflowRuntime, Input extends Standa
         name: config.name,
         runId,
         ctx,
-        // Inline steps do not retry. The caller is holding a request open, and a saga that
-        // cannot finish now should compensate and say so rather than spend the budget.
-        runner: (_name, _config, run) => run({ attempt: 1 }),
+        runner: inlineRunner,
         invoke: (handle) => inlineBody(parsed, handle),
         ...(config.output === undefined ? {} : { output: config.output }),
       })
 
       return { runId, output, deduplicated: false }
     },
-  }
+  } as InlineWorkflow<Ctx, Input, Output>
+
+  definition.tryRun = (options): Promise<TryRunResult<Output>> =>
+    attempt(() => definition.run(options))
 
   return definition
 }
+
+/**
+ * Turn a run into an answer. Every failure this library produces is described here rather than
+ * thrown, and anything it did not produce is still thrown — a bug in a step's own code is not an
+ * outcome, it is a bug.
+ */
+const attempt = async <Output>(
+  run: () => Promise<InlineRunResult<Output>>,
+): Promise<TryRunResult<Output>> => {
+  try {
+    return { ok: true, ...(await run()) }
+  } catch (error) {
+    if (error instanceof WorkflowError) {
+      return {
+        ok: false,
+        runId: error.runId,
+        outcome: error.outcome,
+        failedStep: error.stepName,
+        compensated: error.compensated,
+        failedCompensations: error.failedCompensations,
+        cause: error.cause,
+      }
+    }
+
+    if (error instanceof SchemaError) {
+      return {
+        ok: false,
+        runId: null,
+        outcome: null,
+        failedStep: null,
+        compensated: [],
+        failedCompensations: [],
+        cause: error,
+      }
+    }
+
+    throw error
+  }
+}
+
+export { attempt as attemptRun }

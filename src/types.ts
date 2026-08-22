@@ -366,6 +366,20 @@ export type WorkflowHandle<Ctx> = {
     run: (ctx: StepContext<Ctx>) => Promise<Output>,
     options?: InlineStepOptions<Ctx, Output>,
   ): StepCall<Output>
+  /**
+   * A named group of steps that run at the same time.
+   *
+   * `Promise.all` over steps works and always has; this says what it is, and lets the engine own
+   * the part that is easy to get wrong — every member is allowed to stop before the first
+   * rejection is reported, so nothing is abandoned mid-flight with an undo nobody will run.
+   *
+   * The group is not itself a step. The steps inside it are, so there is nothing extra in the
+   * trail and nothing extra for a durable platform to journal. The name is for the reader.
+   */
+  all<Results extends readonly unknown[]>(
+    name: string,
+    members: { [Index in keyof Results]: () => PromiseLike<Results[Index]> },
+  ): Promise<Results>
   emit: EmitFn<EventsOf<Ctx>>
 }
 
@@ -398,6 +412,28 @@ export type StepPrimitive = {
     options: { type: string; timeout?: string },
   ) => Promise<Payload>
 }
+
+/**
+ * What a run answers with when the caller would rather decide than catch.
+ *
+ * A saga that was undone is a normal outcome — the undo ran, the record is written, and there is
+ * a decision to make. Requiring a try/catch and an `instanceof` to reach it makes the ordinary
+ * case look like the broken one.
+ */
+export type TryRunResult<Output> =
+  | ({ ok: true } & InlineRunResult<Output>)
+  | {
+      ok: false
+      /** Null when the input was refused, because no run was ever opened. */
+      runId: string | null
+      outcome: CompensationOutcome | null
+      failedStep: string | null
+      /** The steps whose undo came back, in the order they were undone. */
+      compensated: string[]
+      /** The steps whose undo refused. Non-empty means something is still standing. */
+      failedCompensations: string[]
+      cause: unknown
+    }
 
 export type InlineRunResult<Output> =
   | { runId: string; output: Output; deduplicated: false }

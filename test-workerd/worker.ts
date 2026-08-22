@@ -1,6 +1,6 @@
 import { createWorkflowEntrypoint } from '../src/cloudflare/index.js'
 import { createD1Journal } from '../src/d1/index.js'
-import { registry, type TestEnv, type TestRuntime } from './definitions.js'
+import { shipThing, type TestEnv, type TestRuntime } from './definitions.js'
 
 const runtimeFor = (env: TestEnv, tenantId: string, actor: string | null): TestRuntime => ({
   tenantId,
@@ -13,7 +13,7 @@ const runtimeFor = (env: TestEnv, tenantId: string, actor: string | null): TestR
 // The entrypoint helper, used exactly as a caller would use it. `class_name` in wrangler.jsonc
 // points at this name.
 export class SagaflowTestWorkflow extends createWorkflowEntrypoint<TestEnv, TestRuntime>({
-  registry,
+  workflows: [shipThing],
   runtime: (env, params) => runtimeFor(env, params.tenantId, params.actor),
 }) {}
 
@@ -46,7 +46,6 @@ export default {
 
     if (url.pathname === '/durable') {
       const { startDurableWorkflow } = await import('../src/index.js')
-      const { shipThing } = await import('./definitions.js')
       const started = await startDurableWorkflow({
         launcher: env.WORKFLOWS,
         definition: shipThing,

@@ -1,7 +1,6 @@
 import { z } from 'zod'
 
 import {
-  createDurableRegistry,
   createStep,
   defineWorkflow,
   type DurableWorkflowHandle,
@@ -76,5 +75,3 @@ export const shipThing = defineWorkflow(
     return { id: written.id }
   },
 )
-
-export const registry = createDurableRegistry<TestRuntime>([shipThing])

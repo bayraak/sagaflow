@@ -5,6 +5,8 @@ export {
   type InlineWorkflow,
 } from './define.js'
 export { requestCancellation, WorkflowCancelledError } from './cancel.js'
+export { millisecondsOf } from './duration.js'
+export { createInlineRunner } from './retry.js'
 export { claimRun, type RunClaim } from './claim.js'
 export { compensationIdempotencyKey, envelopeId, stepIdempotencyKey } from './identity.js'
 export { canonicalise, stableHash } from './canonical.js'
@@ -64,6 +66,7 @@ export type {
   StepPrimitive,
   StepRetryConfig,
   StepStatus,
+  TryRunResult,
   WorkflowExecution,
   WorkflowHandle,
   WorkflowLauncher,

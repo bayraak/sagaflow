@@ -42,12 +42,18 @@ export class WorkflowError extends SagaflowError {
   readonly workflowName: string
   readonly stepName: string | null
   readonly outcome: CompensationOutcome
+  /** The steps whose undo came back, in the order they were undone. */
+  readonly compensated: string[]
+  /** The steps whose undo refused. Non-empty means something is still standing. */
+  readonly failedCompensations: string[]
 
   constructor(params: {
     runId: string
     workflowName: string
     stepName: string | null
     outcome: CompensationOutcome
+    compensated: string[]
+    failedCompensations: string[]
     cause: unknown
   }) {
     super(describeFailure(params), { cause: params.cause })
@@ -57,6 +63,8 @@ export class WorkflowError extends SagaflowError {
     this.workflowName = params.workflowName
     this.stepName = params.stepName
     this.outcome = params.outcome
+    this.compensated = params.compensated
+    this.failedCompensations = params.failedCompensations
   }
 }
 

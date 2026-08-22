@@ -2,7 +2,11 @@
 
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 
-import type { RegisteredWorkflow } from '../registry.js'
+import {
+  createDurableRegistry,
+  type RegisteredWorkflow,
+  type RegistrableWorkflow,
+} from '../registry.js'
 import type { DurableWorkflowParams, WorkflowRuntime } from '../types.js'
 import { createStepPrimitive } from './step-primitive.js'
 
@@ -23,26 +27,34 @@ export type WorkflowEntrypointClass<Env> = new (
  * instance was started with. It is the caller's because a runtime carries the database handle,
  * the sink and whoever is acting, and this package has no business guessing at any of those.
  */
-export const createWorkflowEntrypoint = <Env, Ctx extends WorkflowRuntime>(options: {
-  registry: {
-    find(name: string): RegisteredWorkflow<Ctx> | undefined
-    names(): string[]
-  }
-  runtime(env: Env, params: DurableWorkflowParams): Ctx
-}): WorkflowEntrypointClass<Env> =>
-  class extends WorkflowEntrypoint<Env, DurableWorkflowParams> {
+export const createWorkflowEntrypoint = <Env, Ctx extends WorkflowRuntime>(
+  options: {
+    runtime(env: Env, params: DurableWorkflowParams): Ctx
+  } & (
+    | { workflows: (RegisteredWorkflow<Ctx> | RegistrableWorkflow<Ctx>)[]; registry?: never }
+    | {
+        registry: { find(name: string): RegisteredWorkflow<Ctx> | undefined; names(): string[] }
+        workflows?: never
+      }
+  ),
+): WorkflowEntrypointClass<Env> => {
+  // Hand it the definitions and it builds the registry; hand it a registry and it uses that.
+  // A host that dispatches from somewhere else already has one.
+  const registry = options.registry ?? createDurableRegistry(options.workflows)
+
+  return class extends WorkflowEntrypoint<Env, DurableWorkflowParams> {
     override async run(
       event: Readonly<WorkflowEvent<DurableWorkflowParams>>,
       step: WorkflowStep,
     ): Promise<unknown> {
       const { name, input, runId } = event.payload
-      const workflow = options.registry.find(name)
+      const workflow = registry.find(name)
 
       // A name nothing answers to is a deploy that forgot the registry, and it is worth being
       // loud about: the run record already exists and something has to explain why it stopped.
       if (!workflow) {
         throw new Error(
-          `no durable workflow is registered as "${name}" — known: ${options.registry.names().join(', ')}`,
+          `no durable workflow is registered as "${name}" — known: ${registry.names().join(', ')}`,
         )
       }
 
@@ -53,3 +65,4 @@ export const createWorkflowEntrypoint = <Env, Ctx extends WorkflowRuntime>(optio
       )
     }
   }
+}
