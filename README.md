@@ -75,15 +75,20 @@ and forget to await fails the run by name rather than letting it be recorded as 
 it was still going — turn on `@typescript-eslint/no-floating-promises` and it never happens.
 
 **Your workflow is an async function. `if`, `for` and `await` are the DSL.** There is no
-transform, no `when`, no parallelize; a named parallel group is the one exception, and only
-because the engine has to own it:
+transform, no `when`, no parallelize, and no parallel-group verb either — `Promise.all` already
+is one:
 
 ```ts
-const [invoice, receipt] = await all('paperwork', [
-  () => step('invoice', () => render(order)),
-  () => step('receipt', () => stamp(order)),
+const [invoice, receipt] = await Promise.all([
+  step('invoice', () => render(order)),
+  step('receipt', () => stamp(order)),
 ])
 ```
+
+The engine records start order, waits for every in-flight step before it unwinds, and refuses a
+body that returns while a step it started is still going. Racing belongs _inside_ a step, where
+the platform memoises the winner — a race at the body level would be non-deterministic across a
+replay, which is the one thing a durable body must not be.
 
 Every example in this README is compiled and executed by the test suite
 ([`test/readme-example.test.ts`](./test/readme-example.test.ts)).
@@ -281,9 +286,9 @@ this because it needed none.
 const placeOrder = saga('order.place', async (input: { customerId: string; amount: number }) => {
   await step(
     'charge-card',
-    // ctx.idempotencyKey is `${runId}:${seq}` — the same on every attempt and every replay of
-    // this step. Hand it to your provider's idempotency header.
-    (ctx) => payments.charge(input, { idempotencyKey: ctx.idempotencyKey }),
+    // idempotencyKey() is `${runId}:${seq}` — the same on every attempt and every replay of this
+    // step. Hand it to your provider's idempotency header.
+    () => payments.charge(input, { idempotencyKey: idempotencyKey() }),
     (receipt) => payments.refund(receipt.chargeId),
   )
   await step('ship-order', () => warehouse.ship(input))
@@ -321,15 +326,20 @@ The word is **undo** everywhere you write it. The status column and the lifecycl
 const result = await placeOrder.try(input, flow)
 
 if (!result.ok) {
-  logger.warn({ runId: result.runId, failed: result.failedStep, undone: result.compensated })
+  const { runId, outcome, failedStep, compensated } = result.error
+  logger.warn({ runId, failedStep, undone: compensated })
 
-  return reply.conflict(result.outcome)
+  return reply.conflict(outcome)
 }
+
+return reply.created(result.value)
 ```
 
 A saga that was undone is a normal outcome — the undo ran, the record is written, and there is a
-decision to make. `try` answers with it; the plain call throws a `SagaError` carrying the same
-summary.
+decision to make. `try` answers with `{ ok: true, value, runId, deduplicated }` or
+`{ ok: false, error }`, which is the shape every Result library in TypeScript already uses, so
+wrapping it in yours is one line and depending on any of them is nobody's problem but yours. The
+plain call throws the same `SagaError`.
 
 ## The same request, twice
 

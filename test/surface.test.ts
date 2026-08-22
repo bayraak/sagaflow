@@ -59,8 +59,8 @@ describe('the seven-line example', () => {
 
     const result = await createBooking.try({ seat: '12A' }, flow)
 
-    expect(result).toMatchObject({
-      ok: false,
+    expect(result.ok).toBe(false)
+    expect(result.ok ? null : result.error).toMatchObject({
       outcome: 'compensated',
       failedStep: 'charge',
       compensated: ['reserve'],
@@ -153,7 +153,7 @@ describe('what a definition is', () => {
 
     const result = await write.try({ mark: '' }, flow)
 
-    expect(result).toMatchObject({ ok: false, runId: null })
+    expect(result.ok).toBe(false)
   })
 
   it('answers the same input twice with one run', async () => {

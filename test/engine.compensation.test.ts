@@ -81,7 +81,7 @@ describe('a failing step is undone in reverse', () => {
     expect(thrown).toBeInstanceOf(SagaError)
     expect(thrown instanceof SagaError && thrown.runId).toBe('run_1')
     expect(thrown instanceof SagaError && thrown.workflowName).toBe('test.three-steps')
-    expect(thrown instanceof SagaError && thrown.stepName).toBe('third')
+    expect(thrown instanceof SagaError && thrown.failedStep).toBe('third')
     expect(thrown instanceof SagaError && thrown.outcome).toBe('compensated')
   })
 

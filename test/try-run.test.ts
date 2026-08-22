@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
 import { defineWorkflow } from '../src/define.js'
-import { saga, sagaflow, SagaError, type WorkflowHandle } from '../src/index.js'
+import { saga, sagaflow, SagaError, SchemaError, type WorkflowHandle } from '../src/index.js'
 import { createMemoryJournal } from '../src/memory/index'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
@@ -35,7 +35,7 @@ describe('running a workflow without throwing', () => {
     const result = await succeeding.tryRun({ input: { mark: 'x' }, ctx: harness.ctx })
 
     expect(result.ok).toBe(true)
-    expect(result.ok && !result.deduplicated && result.output).toEqual({ written: 'x' })
+    expect(result.ok && result.value).toEqual({ written: 'x' })
   })
 
   it('answers with the trail when it did not', async () => {
@@ -43,15 +43,17 @@ describe('running a workflow without throwing', () => {
 
     const result = await failing().tryRun({ input: { mark: 'x' }, ctx: harness.ctx })
 
-    expect(result).toMatchObject({
-      ok: false,
+    expect(result.ok).toBe(false)
+    expect(result.ok ? null : result.error).toMatchObject({
       runId: 'run_1',
       outcome: 'compensated',
       failedStep: 'boom',
       compensated: ['second', 'first'],
       failedCompensations: [],
     })
-    expect(result.ok ? null : (result.cause as Error).message).toBe('boom refused')
+    expect(
+      result.ok ? null : result.error.cause instanceof Error ? result.error.cause.message : null,
+    ).toBe('boom refused')
   })
 
   it('names the undos that themselves refused', async () => {
@@ -62,8 +64,7 @@ describe('running a workflow without throwing', () => {
       ctx: harness.ctx,
     })
 
-    expect(result).toMatchObject({
-      ok: false,
+    expect(result.ok ? null : result.error).toMatchObject({
       outcome: 'failed',
       compensated: ['second'],
       failedCompensations: ['first'],
@@ -75,7 +76,8 @@ describe('running a workflow without throwing', () => {
 
     const result = await succeeding.tryRun({ input: { mark: '' }, ctx: harness.ctx })
 
-    expect(result).toMatchObject({ ok: false, runId: null, outcome: null })
+    expect(result.ok).toBe(false)
+    expect(result.ok ? null : result.error).toBeInstanceOf(SchemaError)
   })
 
   it('is on a saga definition too', async () => {
@@ -87,7 +89,7 @@ describe('running a workflow without throwing', () => {
 
     const result = await write.try({ mark: 'x' }, flow)
 
-    expect(result.ok && !result.deduplicated && result.output).toEqual({ written: 'x' })
+    expect(result.ok && result.value).toEqual({ written: 'x' })
   })
 })
 
@@ -103,7 +105,7 @@ describe('the error a failed run throws', () => {
     expect(thrown).toBeInstanceOf(SagaError)
     expect(thrown as SagaError).toMatchObject({
       outcome: 'failed',
-      stepName: 'boom',
+      failedStep: 'boom',
       compensated: ['second'],
       failedCompensations: ['first'],
     })

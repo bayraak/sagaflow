@@ -20,11 +20,11 @@ export class SagaflowError extends Error {
 
 const describeFailure = (params: {
   workflowName: string
-  stepName: string | null
+  failedStep: string | null
   outcome: CompensationOutcome
   cause: unknown
 }): string => {
-  const where = params.stepName ?? 'its body'
+  const where = params.failedStep ?? 'its body'
 
   if (params.outcome === 'cancelled') {
     return `workflow ${params.workflowName} was cancelled at ${where} and was fully undone`
@@ -40,7 +40,7 @@ const describeFailure = (params: {
 export class SagaError extends SagaflowError {
   readonly runId: string
   readonly workflowName: string
-  readonly stepName: string | null
+  readonly failedStep: string | null
   readonly outcome: CompensationOutcome
   /** The steps whose undo came back, in the order they were undone. */
   readonly compensated: string[]
@@ -50,7 +50,7 @@ export class SagaError extends SagaflowError {
   constructor(params: {
     runId: string
     workflowName: string
-    stepName: string | null
+    failedStep: string | null
     outcome: CompensationOutcome
     compensated: string[]
     failedCompensations: string[]
@@ -61,7 +61,7 @@ export class SagaError extends SagaflowError {
     this.name = 'SagaError'
     this.runId = params.runId
     this.workflowName = params.workflowName
-    this.stepName = params.stepName
+    this.failedStep = params.failedStep
     this.outcome = params.outcome
     this.compensated = params.compensated
     this.failedCompensations = params.failedCompensations

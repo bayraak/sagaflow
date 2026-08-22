@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { all, ctx, emit, runId, saga, sagaflow, step } from 'sagaflow'
+import { ctx, emit, runId, saga, sagaflow, step } from 'sagaflow'
 import { createMemoryJournal, createMemorySink } from 'sagaflow/memory'
 
 // The README's first screen. No handle, no instance argument, no ceremony — the verbs are
@@ -89,17 +89,6 @@ describe('the verbs', () => {
     expect(seen).toEqual([{ tenantId: 'acme', actor: 'tester', db: 'a-handle' }])
   })
 
-  it('group work with all()', async () => {
-    const journal = createMemoryJournal()
-    const flow = sagaflow({ journal: journal.journal })
-
-    const fan = saga('thing.fan', async () =>
-      all('fan-out', [() => step('a', async () => 'a'), () => step('b', async () => 'b')]),
-    )
-
-    expect(await fan(undefined, flow)).toEqual(['a', 'b'])
-  })
-
   it('do not leak between concurrent runs', async () => {
     const journal = createMemoryJournal()
     const flow = sagaflow({ journal: journal.journal })
@@ -178,7 +167,9 @@ describe('a saga called from inside a saga', () => {
 
     const result = await book.try(undefined, flow)
 
-    expect(result).toMatchObject({ ok: false, compensated: ['charge/authorise'] })
+    expect(result.ok ? null : result.error).toMatchObject({
+      compensated: ['charge/authorise'],
+    })
     expect(refunded).toEqual(['ch_7'])
     expect(journal.runs).toHaveLength(1)
   })

@@ -176,6 +176,17 @@ Two things fail in ways nothing else will notice:
 
 Both are idempotent and both are your cron.
 
+## Hooks, and why they are not here yet
+
+A hook is a named extension point inside a run for a **different module** — the plugin that wants
+to reserve stock when an order is placed, without the order module knowing it exists. When they
+arrive (0.2) they will be steps like any other: their own undo, able to fail the run, undone with
+it. Nothing weaker would be honest, because a hook that cannot fail the run is a hook that lets a
+half-applied mutation through.
+
+For one team owning the saga, a hook is a function call with extra machinery around it. Call the
+function.
+
 ## What is deliberately absent
 
 **Flow control.** No per-tenant concurrency, throttling or debouncing. If you need them, a

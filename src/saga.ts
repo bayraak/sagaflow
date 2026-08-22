@@ -1,9 +1,10 @@
 import {
   activeFrame,
   activeScope,
-  all,
+  attempt,
   ctx,
   emit,
+  idempotencyKey,
   runId,
   runInFrame,
   sleep,
@@ -13,8 +14,9 @@ import {
 import { defineWorkflow, type DurableWorkflow, type InlineWorkflow } from './define.js'
 import type { Flow } from './flow.js'
 import { defaultInstance } from './instance.js'
+import type { TryRunResult } from './result.js'
 import { anything, validate } from './schema.js'
-import type { StandardSchemaV1, TryRunResult, WorkflowRuntime } from './types.js'
+import type { StandardSchemaV1, WorkflowRuntime } from './types.js'
 
 /**
  * The verbs, as methods.
@@ -26,9 +28,10 @@ import type { StandardSchemaV1, TryRunResult, WorkflowRuntime } from './types.js
 export type SagaHandle = {
   step: typeof step
   emit: typeof emit
-  all: typeof all
   ctx: typeof ctx
   runId: typeof runId
+  idempotencyKey: typeof idempotencyKey
+  attempt: typeof attempt
 }
 
 export type DurableSagaHandle = SagaHandle & {
@@ -36,7 +39,16 @@ export type DurableSagaHandle = SagaHandle & {
   waitForEvent: typeof waitForEvent
 }
 
-const handle: DurableSagaHandle = { step, emit, all, ctx, runId, sleep, waitForEvent }
+const handle: DurableSagaHandle = {
+  step,
+  emit,
+  ctx,
+  runId,
+  idempotencyKey,
+  attempt,
+  sleep,
+  waitForEvent,
+}
 
 type SharedOptions<Input> = {
   output?: StandardSchemaV1
@@ -224,23 +236,11 @@ export function saga(
       call?: CallOptions,
     ): Promise<TryRunResult<unknown>> => {
       if (activeFrame() || durable) {
-        try {
-          return {
-            ok: true,
-            runId: '',
-            output: await callable(given, flow, call),
-            deduplicated: false,
-          }
-        } catch (error) {
-          return {
-            ok: false,
-            runId: null,
-            outcome: null,
-            failedStep: null,
-            compensated: [],
-            failedCompensations: [],
-            cause: error,
-          }
+        return {
+          ok: true,
+          value: await callable(given, flow, call),
+          runId: runId(),
+          deduplicated: false,
         }
       }
 

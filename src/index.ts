@@ -8,9 +8,10 @@ export { canonicalise, stableHash } from './canonical.js'
 export { executeDurable } from './durable.js'
 export { sagaflow, type Flow, type RunReport, type SagaflowConfig } from './flow.js'
 export {
-  all,
+  attempt,
   ctx,
   emit,
+  idempotencyKey,
   runId,
   sleep,
   step,
@@ -43,6 +44,7 @@ export {
   registerDurableWorkflow,
   type RegisteredWorkflow,
 } from './registry.js'
+export type { TryRunResult } from './result.js'
 export { anything, SchemaError } from './schema.js'
 export { compensationStepName, defaultStepConfig, reservedStepNames } from './step.js'
 export { abandonedSweepLimit, sweepAbandonedRuns } from './sweep.js'
@@ -76,7 +78,6 @@ export type {
   StepPrimitive,
   StepRetryConfig,
   StepStatus,
-  TryRunResult,
   WorkflowExecution,
   WorkflowHandle,
   WorkflowLauncher,

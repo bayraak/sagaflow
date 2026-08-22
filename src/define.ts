@@ -1,13 +1,13 @@
 import { stableHash } from './canonical.js'
 import { executeRun } from './engine.js'
 import { SagaError } from './errors.js'
+import type { TryRunResult } from './result.js'
 import { createInlineRunner } from './retry.js'
 import { SchemaError, validate } from './schema.js'
 import type {
   DurableWorkflowHandle,
   InlineRunResult,
   StandardSchemaV1,
-  TryRunResult,
   WorkflowExecution,
   WorkflowHandle,
   WorkflowRuntime,
@@ -225,31 +225,18 @@ const attempt = async <Output>(
   run: () => Promise<InlineRunResult<Output>>,
 ): Promise<TryRunResult<Output>> => {
   try {
-    return { ok: true, ...(await run()) }
-  } catch (error) {
-    if (error instanceof SagaError) {
-      return {
-        ok: false,
-        runId: error.runId,
-        outcome: error.outcome,
-        failedStep: error.stepName,
-        compensated: error.compensated,
-        failedCompensations: error.failedCompensations,
-        cause: error.cause,
-      }
-    }
+    const answered = await run()
 
-    if (error instanceof SchemaError) {
-      return {
-        ok: false,
-        runId: null,
-        outcome: null,
-        failedStep: null,
-        compensated: [],
-        failedCompensations: [],
-        cause: error,
-      }
+    return {
+      ok: true,
+      value: answered.output as Output,
+      runId: answered.runId,
+      deduplicated: answered.deduplicated,
     }
+  } catch (error) {
+    // Anything this library produced is an outcome. Anything else is a bug in a step's own code,
+    // and a bug is not an outcome.
+    if (error instanceof SagaError || error instanceof SchemaError) return { ok: false, error }
 
     throw error
   }

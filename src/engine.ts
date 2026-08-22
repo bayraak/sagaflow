@@ -50,28 +50,6 @@ const watch = <Fact>(hook: ((fact: Fact) => void) | undefined, fact: () => Fact)
   }
 }
 
-/*
- * Every member is started, and every member is allowed to STOP before the first rejection is
- * reported. `Promise.all` reports the first rejection immediately and leaves the others running,
- * which is how a step finishes a millisecond later with an undo nobody is left to run. The name
- * is for the reader — the group is not journaled, the steps inside it are.
- */
-const all = async <Results extends readonly unknown[]>(
-  _name: string,
-  members: { [Index in keyof Results]: () => PromiseLike<Results[Index]> },
-): Promise<Results> => {
-  const settled = await Promise.allSettled(
-    (members as ReadonlyArray<() => PromiseLike<unknown>>).map((member) => member()),
-  )
-
-  const refused = settled.find((outcome) => outcome.status === 'rejected')
-  if (refused && refused.status === 'rejected') throw refused.reason
-
-  return settled.map((outcome) =>
-    outcome.status === 'fulfilled' ? outcome.value : undefined,
-  ) as unknown as Results
-}
-
 type Undo<Ctx> = {
   seq: number
   name: string
@@ -354,7 +332,6 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     runId,
     emit: bodyEmit,
     step: trackedStep,
-    all,
   }
 
   /*
@@ -521,7 +498,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     throw new SagaError({
       runId,
       workflowName: name,
-      stepName: failedStep ?? cancelledAfter,
+      failedStep: failedStep ?? cancelledAfter,
       outcome,
       compensated,
       failedCompensations,

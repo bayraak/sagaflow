@@ -38,6 +38,8 @@ type Frame = {
   /** What a nested saga's steps are named under. Empty at the top of a run. */
   prefix: string
   durable: boolean
+  /** Set while a step's own function — or its undo — is running. */
+  step?: StepRunContext
 }
 
 /*
@@ -125,7 +127,11 @@ export function step(first: unknown, second?: unknown, third?: unknown): Promise
   return Promise.resolve(
     frame.handle.step(
       `${frame.prefix}${name}`,
-      async (stepContext) => run(contextOf(stepContext)),
+      async (stepContext) => {
+        const scoped = contextOf(stepContext)
+
+        return runInFrame({ ...frame, step: scoped }, async () => run(scoped))
+      },
       {
         ...(options.retries === undefined ? {} : { retries: options.retries }),
         ...(options.timeout === undefined ? {} : { timeout: options.timeout }),
@@ -137,7 +143,11 @@ export function step(first: unknown, second?: unknown, third?: unknown): Promise
                 stepContext: StepContext<WorkflowRuntime>,
                 reason: CompensationReason,
               ): Promise<void> => {
-                await declaredUndo(output, contextOf(stepContext), reason)
+                const scoped = contextOf(stepContext)
+
+                await runInFrame({ ...frame, step: scoped }, async () => {
+                  await declaredUndo(output, scoped, reason)
+                })
               },
             }),
       },
@@ -153,12 +163,6 @@ export function step(first: unknown, second?: unknown, third?: unknown): Promise
 export const emit = async (type: string, payload: unknown): Promise<void> => {
   ;(inside('emit').handle.emit as (t: string, p: unknown) => void)(type, payload)
 }
-
-/** A named group of steps that run at the same time. */
-export const all = <Results extends readonly unknown[]>(
-  name: string,
-  members: { [Index in keyof Results]: () => PromiseLike<Results[Index]> },
-): Promise<Results> => inside('all').handle.all(name, members)
 
 const durableOnly = (verb: string, frame: Frame): void => {
   if (frame.durable) return
@@ -212,6 +216,24 @@ export const ctx = <Extra = Record<string, unknown>>(): Extra & {
 
 /** The id of the run this body is part of. */
 export const runId = (): string => inside('runId').handle.runId
+
+const insideStep = (verb: string): StepRunContext => {
+  const scoped = inside(verb).step
+  if (!scoped) {
+    throw new SagaflowError(`${verb}() is per step — call it inside a step's own function`)
+  }
+
+  return scoped
+}
+
+/**
+ * The key this step presents to the outside world. The same on every attempt and every replay
+ * of this step, and different for every other step in the run.
+ */
+export const idempotencyKey = (): string => insideStep('idempotencyKey').idempotencyKey
+
+/** Which attempt of this step is running, from one. */
+export const attempt = (): number => insideStep('attempt').attempt
 
 /*
  * The instance a call belongs to, when nobody passed one.

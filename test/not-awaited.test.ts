@@ -26,8 +26,10 @@ describe('a step the body forgot to await', () => {
     const result = await forgetful.try(undefined, flow)
 
     expect(result.ok).toBe(false)
-    expect(result.ok ? null : (result.cause as Error).message).toBe("step 'second' was not awaited")
-    expect(result.ok ? null : (result.cause as Error)).toBeInstanceOf(SagaflowError)
+    expect(
+      result.ok ? null : result.error.cause instanceof Error ? result.error.cause.message : null,
+    ).toBe("step 'second' was not awaited")
+    expect(result.ok ? null : (result.error.cause as Error)).toBeInstanceOf(SagaflowError)
   })
 
   it('undoes what the run had already done', async () => {

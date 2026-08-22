@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { emit, saga, sagaflow, sleep, step, waitForEvent } from 'sagaflow'
+import { emit, idempotencyKey, saga, sagaflow, sleep, step, waitForEvent } from 'sagaflow'
 import { createMemoryJournal, createMemorySink } from 'sagaflow/memory'
 import { z } from 'zod'
 
@@ -54,9 +54,9 @@ describe('README: undoing leaves a trail', () => {
       async (_input) => {
         await step(
           'charge-card',
-          // ctx.idempotencyKey is the same on every attempt and every replay of this step. Hand
-          // it to your provider's idempotency header and a retry stops being a second charge.
-          async (ctx) => ({ chargeId: `ch_${ctx.idempotencyKey}` }),
+          // idempotencyKey() is the same on every attempt and every replay of this step. Hand it
+          // to your provider's idempotency header and a retry stops being a second charge.
+          async () => ({ chargeId: `ch_${idempotencyKey()}` }),
           (receipt) => {
             refunded.push(receipt.chargeId)
           },
@@ -71,8 +71,8 @@ describe('README: undoing leaves a trail', () => {
 
     const result = await placeOrder.try({ customerId: 'cus_1', amount: 4200 }, flow)
 
-    expect(result).toMatchObject({
-      ok: false,
+    expect(result.ok).toBe(false)
+    expect(result.ok ? null : result.error).toMatchObject({
       outcome: 'compensated',
       failedStep: 'ship-order',
       compensated: ['charge-card'],
