@@ -161,6 +161,12 @@ export type EventSchemaMap = Record<string, StandardSchemaV1>
  */
 export type LifecycleEventPayloads = {
   'workflow.completed': { runId: string; name: string }
+  'workflow.compensated': {
+    runId: string
+    name: string
+    error: string
+    outcome: CompensationOutcome
+  }
 }
 
 /**

@@ -7,7 +7,7 @@ export {
 export { executeDurable } from './durable'
 export { executeRun, type StepRunner } from './engine'
 export { messageOf, WorkflowError } from './errors'
-export { lifecycleEventTypes, workflowCompletedEvent } from './events'
+export { lifecycleEventTypes, workflowCompensatedEvent, workflowCompletedEvent } from './events'
 export { dispatchEvents, eventBatchLimit } from './outbox'
 export { createDurableRegistry, registerDurableWorkflow, type RegisteredWorkflow } from './registry'
 export { SchemaError } from './schema'

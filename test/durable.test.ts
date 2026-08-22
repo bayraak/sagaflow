@@ -177,17 +177,16 @@ describe('the durable executor drives the same body through step primitives', ()
     expect(harness.steps.find((step) => step.name === 'compensate:first')?.status).toBe(
       'compensated',
     )
-    expect(harness.finishes).toEqual([
-      {
-        runId: 'run_given',
-        status: 'compensated',
-        output: undefined,
-        error: 'second refused',
-        // A compensated run never happened, so it hands nothing the body emitted over to be
-        // delivered.
-        events: [],
-      },
-    ])
+    expect(harness.finishes).toHaveLength(1)
+    expect(harness.finishes[0]).toMatchObject({
+      runId: 'run_given',
+      status: 'compensated',
+      output: undefined,
+      error: 'second refused',
+    })
+    // A compensated run never happened, so it hands nothing the BODY emitted over to be
+    // delivered — only the fact that the run itself was undone.
+    expect(harness.finishes[0]?.events.map((event) => event.type)).toEqual(['workflow.compensated'])
   })
 
   it('flushes its events through a primitive step', async () => {

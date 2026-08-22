@@ -2,6 +2,7 @@ import { validateSync } from './schema'
 import type { EventEnvelope, EventSchemaMap, LifecycleEventPayloads } from './types'
 
 export const workflowCompletedEvent = 'workflow.completed'
+export const workflowCompensatedEvent = 'workflow.compensated'
 
 /**
  * Facts the engine states about the run itself. A body never has to emit these, and a
@@ -9,6 +10,7 @@ export const workflowCompletedEvent = 'workflow.completed'
  */
 export const lifecycleEventTypes: ReadonlyArray<keyof LifecycleEventPayloads> = [
   workflowCompletedEvent,
+  workflowCompensatedEvent,
 ]
 
 const isLifecycleEvent = (type: string): boolean =>

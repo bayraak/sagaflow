@@ -78,10 +78,11 @@ describe('the events a failed run was holding', () => {
       .catch(() => undefined)
 
     // The body reached the third step, so it went past the emit on the way — the drop below is
-    // a drop, not an emission that never happened.
+    // a drop, not an emission that never happened. What the run puts on the table is the one
+    // fact about the run itself, and nothing the body announced.
     expect(invocations).toContain('invoke:third')
-    expect(outbox).toEqual([])
-    expect(finishes[0]?.events).toEqual([])
+    expect(outbox.map((event) => event.type)).toEqual(['workflow.compensated'])
+    expect(finishes[0]?.events.map((event) => event.type)).toEqual(['workflow.compensated'])
   })
 
   it('never sends an event emitted before the failure', async () => {
@@ -107,8 +108,8 @@ describe('the events a failed run was holding', () => {
 
     // The undo that emits actually ran, so the emission happened and was then dropped.
     expect(invocations).toContain('compensate:first')
-    expect(outbox).toEqual([])
+    expect(outbox.map((event) => event.type)).toEqual(['workflow.compensated'])
     expect(sent).toEqual([])
-    expect(finishes[0]?.events).toEqual([])
+    expect(finishes[0]?.events.map((event) => event.type)).toEqual(['workflow.compensated'])
   })
 })

@@ -1,5 +1,11 @@
 import { messageOf, WorkflowError } from './errors'
-import { createEnvelope, validateEmission, workflowCompletedEvent, type RawEvent } from './events'
+import {
+  createEnvelope,
+  validateEmission,
+  workflowCompensatedEvent,
+  workflowCompletedEvent,
+  type RawEvent,
+} from './events'
 import { dispatchEvents } from './outbox'
 import { defaultStepConfig } from './step'
 import type {
@@ -48,18 +54,22 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
    * lets the second write land on rows that already exist instead of handing the consumer
    * copies it has no way to recognise.
    */
-  const mint = (event: RawEvent) => {
-    held.push(
-      createEnvelope({
-        type: event.type,
-        payload: event.payload,
-        tenantId: ctx.tenantId,
-        actor: ctx.actor ?? null,
-        runId,
-        ordinal,
-      }),
-    )
+  const envelopeFor = (event: RawEvent) => {
+    const envelope = createEnvelope({
+      type: event.type,
+      payload: event.payload,
+      tenantId: ctx.tenantId,
+      actor: ctx.actor ?? null,
+      runId,
+      ordinal,
+    })
     ordinal += 1
+
+    return envelope
+  }
+
+  const mint = (event: RawEvent) => {
+    held.push(envelopeFor(event))
   }
 
   // A body emits into the run directly; a step emits into its own result. Validation happens
@@ -209,17 +219,32 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   } catch (error) {
     const outcome = await compensate()
 
+    /*
+     * What the body held is dropped with the run: a compensated run never happened, so nothing
+     * downstream is told that it did. How the run ENDED is a different fact, and one somebody
+     * does have to be told — an audit log, a metrics mirror, an operator reading a dashboard.
+     * It is a fact about the run rather than about the change, so it is the only thing a
+     * compensated run puts on the table, and it travels in the write that closes the run like
+     * every other event does.
+     *
+     * It is not drained here. A run that fell over is on nobody's hot path, its announcement
+     * is not worth a queue call on the way out of a failure, and the sweeper carries it.
+     */
+    const announcement = envelopeFor({
+      type: workflowCompensatedEvent,
+      payload: { runId, name, error: messageOf(error), outcome },
+    })
+
     await runner('finish-run', defaultStepConfig, () =>
       ctx.journal.finishRun({
         tenantId: ctx.tenantId,
         runId,
         status: outcome,
         error: messageOf(error),
+        events: [announcement],
       }),
     )
 
-    // What the body held is dropped with the run. A compensated run never happened, so nothing
-    // downstream is told that it did.
     throw new WorkflowError({
       runId,
       workflowName: name,
