@@ -1,8 +1,9 @@
 # Benchmarks
 
 sagaflow asks you to make every write a saga. That is only a reasonable thing to ask if it is
-cheap, so here is the cost, measured three ways: what it does to your database, what it costs in
-time, and how much you have to write.
+cheap and if the promises hold, so here is the cost measured four ways: what it does to your
+database, what it costs in time, how many of the guarantees break under fault injection, and how
+much you have to write.
 
 Reproduce with `bun run bench`. Method, and what is deliberately excluded, in
 [`bench/README.md`](../bench/README.md).
@@ -90,7 +91,36 @@ these scales. The SQLite 1-step p95 is the widest relative outlier in the table,
 subject with the smallest amount of work per sample, so it is the one most exposed to a
 collection landing inside a measurement.
 
-## 3. What you must write
+## 3. What it costs to be wrong
+
+The third measurement is not a time, it is a count: how many of the guarantees break when
+things go wrong at every point they can. Four properties in
+[`test/properties/`](../test/properties/) generate scenarios rather than enumerate them, and
+each one fails on the first violation it finds.
+
+| Property                                                                                   | What is generated                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Compensation completeness](../test/properties/compensation-completeness.property.test.ts) | Any number of steps, failing anywhere, any pattern of undos declared and undos refusing, run sequentially or concurrently through a relay that inverts completion order |
+| [Outbox atomicity](../test/properties/outbox-atomicity.property.test.ts)                   | The journal giving out at a step record, the finish, the outbox write inside the finish, or the delivery note — with the sink allowed to refuse alongside it            |
+| [Re-invocation idempotency](../test/properties/reinvocation-idempotency.property.test.ts)  | An isolate dying at any checkpoint boundary, steps the platform never recorded, and pointless re-invocations after the run has already finished                         |
+| [At-least-once delivery](../test/properties/at-least-once-dedupe.property.test.ts)         | Refused batches, lost delivery notes, and a transport that hands the same batch over twice, across more than one tenant                                                 |
+
+```
+20,000 scenarios — 5,000 per property — 0 violations
+SAGAFLOW_PROPERTY_RUNS=5000 bun run test:properties
+```
+
+Two hundred scenarios per property is what the default run does, on a fresh seed each time,
+with the seed printed so a find is reproducible via `SAGAFLOW_PROPERTY_SEED`.
+
+Each property also states the situations it exists to cover and fails if a run never reached
+one of them — a generator that drifts into exercising a single branch stays green while asking
+nothing, and that is the way a suite like this normally dies. And each is confirmed by mutation:
+giving envelope ids a timestamp, taking the dedupe out of the journal's finish, marking events
+dispatched before sending them, or closing a run before its events are queued each make the
+corresponding property fail with the specific thing it dropped.
+
+## 4. What you must write
 
 The only comparison in this document that survives leaving this machine, because it is counted
 by a line counter and is therefore identical everywhere.
