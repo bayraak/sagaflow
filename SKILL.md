@@ -30,27 +30,37 @@ import {
   sweepAbandonedRuns,
   requestCancellation,
   WorkflowCancelledError,
+  SagaflowError,
   WorkflowError,
   SchemaError,
+  IdempotencyKeyHeldError,
   messageOf,
+  lifecycleEvents,
+  stepIdempotencyKey,
+  envelopeId,
 } from 'sagaflow'
 import { createMemoryJournal, createMemorySink } from 'sagaflow/memory'
+import { journalConformance } from 'sagaflow/testing'
+import { createSqlJournal } from 'sagaflow/sql'
+import { createD1Journal } from 'sagaflow/d1'
+import { createSqliteJournal } from 'sagaflow/sqlite'
 ```
 
 ## Adding a workflow, end to end
 
-1. **Write the steps.** `createStep(name, invoke, compensate?, config?)`. `invoke` returns
-   `{ output, compensateWith? }`. The undo is registered **from the returned value**, never from
-   a closure — a durable replay does not run the body again, and anything living in that closure
-   is gone.
+1. **Write the steps.** `createStep(name, { run, compensate?, retries?, timeout? })`. `run`
+   returns `{ output, compensateWith? }`. The undo is registered **from the returned value**,
+   never from a closure — a durable replay does not run the body again, and anything living in
+   that closure is gone.
 2. **Compose the definition.** `defineWorkflow({ name, input, execution, output?, idempotency? }, body)`.
    `input` and `output` are any Standard Schema (Zod, Valibot, ArkType). `idempotency` derives a
    key from the parsed input.
 3. **Choose the executor.** Durable if it sleeps, waits, fans out, touches the outside world,
    takes more than roughly a second, or must survive a crash. Inline otherwise.
 4. **Run it.** Inline: `definition.run({ input, ctx })`. Durable:
-   `startDurableWorkflow(env, definition, { input, ctx })`, and register the definition in the
-   dispatcher's registry — that registry is the only thing that makes it reachable by name.
+   `startDurableWorkflow({ launcher: env.WORKFLOWS, definition, input, ctx })`, and put the
+   definition in `createDurableRegistry([...])` — that registry is the only thing that makes it
+   reachable by name.
 5. **Emit what it announces.** `wf.emit(type, payload)` in the body, `ctx.emit(...)` in a step.
    Held until the run succeeds, written in the closing batch, delivered afterwards.
 6. **Test it.** Memory journal, and a fake `StepPrimitive` for durable definitions. No platform.
@@ -72,6 +82,9 @@ const ctx = { tenantId, actor, journal, events, eventSchemas }
 - An idempotency key is held by running and completed runs and released by the rest.
 - Every step context carries `ctx.idempotencyKey` = `${runId}:${seq}` (`:undo` for a
   compensation), stable across attempts and replays.
+- A step name reused within one run is refused, on both executors.
+- `workflow.completed` and `workflow.compensated` belong to the engine; a body emitting one is
+  refused.
 
 ## The rules you still have to keep
 
@@ -106,6 +119,9 @@ const platform: StepPrimitive = {
 }
 await executeDurable(definition, { runId, input }, ctx, platform)
 ```
+
+If you write a journal adapter, prove it with `journalConformance` from `sagaflow/testing` —
+34 cases covering every promise the engine relies on, runnable under any test runner.
 
 Assert on the rows the journal holds, not on which functions were called. To reproduce a durable
 replay, make `do` cache results by name; to reproduce retries, make it call `run` more than once
