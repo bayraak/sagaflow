@@ -191,8 +191,9 @@ export type RunJournal = {
 export type EventSchemaMap = Record<string, StandardSchemaV1>
 
 /**
- * Facts about the run itself, emitted by the engine rather than by any body. They are typed
- * in here so a consumer can switch on them exhaustively beside its own events.
+ * Facts about the run itself, emitted by the engine and by nothing else. A workflow that tries
+ * to emit one is refused. They are declared here so a consumer can switch on them exhaustively
+ * beside its own events.
  */
 export type LifecycleEventPayloads = {
   'workflow.completed': { runId: string; name: string }
@@ -223,16 +224,12 @@ export type EventsOf<Ctx> = Ctx extends { eventSchemas?: infer Events }
     : EventSchemaMap
   : EventSchemaMap
 
-export type EmitFn<Events extends EventSchemaMap = EventSchemaMap> = {
-  <Type extends keyof Events & string>(
-    type: Type,
-    payload: StandardSchemaV1.InferInput<Events[Type]>,
-  ): void
-  <Type extends keyof LifecycleEventPayloads>(
-    type: Type,
-    payload: LifecycleEventPayloads[Type],
-  ): void
-}
+export type EmitFn<Events extends EventSchemaMap = EventSchemaMap> = <
+  Type extends Exclude<keyof Events & string, keyof LifecycleEventPayloads>,
+>(
+  type: Type,
+  payload: StandardSchemaV1.InferInput<Events[Type]>,
+) => void
 
 /**
  * What a step is handed. `idempotencyKey` is the step's own — `${runId}:${seq}`, and

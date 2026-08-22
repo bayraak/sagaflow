@@ -26,14 +26,18 @@ export const validateEmission = (
   type: string,
   payload: unknown,
 ): unknown => {
+  // The engine states exactly one fact about every run it closes. A body emitting the same type
+  // would put a second one on the table, and anything counting runs from the stream — an audit
+  // log, a metrics mirror — would quietly count wrong. The name belongs to the engine, like the
+  // step names it uses for itself.
+  if (isLifecycleEvent(type)) {
+    throw new Error(`"${type}" is emitted by the engine and cannot be emitted by a workflow`)
+  }
+
   if (!schemas) return payload
 
   const schema = schemas[type]
-  if (!schema) {
-    if (isLifecycleEvent(type)) return payload
-
-    throw new Error(`no event schema is declared for "${type}"`)
-  }
+  if (!schema) throw new Error(`no event schema is declared for "${type}"`)
 
   return validateSync(schema, payload, `the payload of "${type}"`)
 }

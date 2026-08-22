@@ -49,6 +49,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   const held: EventEnvelope[] = []
   const undos: Undo[] = []
   const inflight: Promise<unknown>[] = []
+  const usedNames = new Set<string>()
   let seq = 0
   let ordinal = 0
   let failedStep: string | null = null
@@ -108,6 +109,20 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     // and somebody else's code has try/catch in it; swallowing the cancellation must not buy
     // it another step.
     if (cancelledAfter !== null) throw new WorkflowCancelledError(runId)
+
+    /*
+     * The most expensive durable bug there is, and completely silent: a platform memoises step
+     * results BY NAME, so a second use of one definition in one run is handed the first use's
+     * result and the work it was asked to do never happens — the digest goes to the first
+     * recipient three times and the other two hear nothing. Inline it appears to work, which is
+     * worse, because the bug is then only found in production.
+     */
+    if (usedNames.has(step.name)) {
+      throw new Error(
+        `step "${step.name}" was already used in this run — wrap it with namedStep(step, "${step.name}-2")`,
+      )
+    }
+    usedNames.add(step.name)
 
     const current = seq
     seq += 1

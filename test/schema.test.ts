@@ -131,12 +131,16 @@ describe('emitting against a declared map', () => {
     expect(runs[0]?.status).toBe('compensated')
   })
 
-  it('allows the facts the engine states about the run itself', async () => {
-    const { ctx, outbox } = createTestRuntime()
+  // Reserved, not merely undeclared — see reserved-events.test.ts for why the engine keeps
+  // these names to itself.
+  it('refuses the facts the engine states about the run itself', async () => {
+    const { ctx, runs } = createTestRuntime()
 
-    await emitting('workflow.completed').run({ input: {}, ctx })
+    await emitting('workflow.completed')
+      .run({ input: {}, ctx })
+      .catch(() => undefined)
 
-    expect(outbox.map((event) => event.type)).toEqual(['workflow.completed', 'workflow.completed'])
+    expect(runs[0]?.status).toBe('compensated')
   })
 
   it('lets a runtime that declares no map emit anything', async () => {
