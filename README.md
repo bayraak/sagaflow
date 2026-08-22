@@ -540,6 +540,17 @@ executor; we bring the SQL.
 | Cloudflare D1 | `@bayraak/sagaflow/d1`     | Workers                                              |
 | SQLite        | `@bayraak/sagaflow/sqlite` | `bun:sqlite` / `node:sqlite`                         |
 
+Getting the tables in place is two lines or one command, whichever suits you:
+
+```ts
+const journal = createSqliteJournal(db)
+await journal.migrate() // every statement is `if not exists`; safe to run at boot
+```
+
+```bash
+bunx sagaflow schema > migrations/0001_sagaflow.sql   # for your own migration tool
+```
+
 The contract is nine methods ([`docs/journal.md`](./docs/journal.md)); an adapter is a small file.
 The default tables are `saga_runs`, `saga_run_steps` and `saga_outbox`, and their names are
 configurable — sagaflow does not own your schema, your migration tool does. See

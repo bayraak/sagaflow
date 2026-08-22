@@ -7,10 +7,10 @@ import type {
   WorkflowExecution,
 } from '../types.js'
 import type { SqlDriver } from './driver.js'
-import { schemaFor } from './schema.js'
+import { defaultTableNames, schemaFor } from './schema.js'
 
 export type { SqlDriver, SqlStatement } from './driver.js'
-export { schemaFor, schemaSql, schemaStatements } from './schema.js'
+export { defaultTableNames, schemaFor, schemaSql, schemaStatements } from './schema.js'
 
 /**
  * A journal that can also create its own tables. `migrate()` is the two-minute path; your
@@ -23,12 +23,6 @@ export type SqlJournal = RunJournal & { migrate(): Promise<void> }
  * does — so if the names in `schema.sql` do not suit you, change them there and say so here.
  */
 export type SqlTableNames = { runs: string; steps: string; outbox: string }
-
-export const defaultTableNames: SqlTableNames = {
-  runs: 'saga_runs',
-  steps: 'saga_run_steps',
-  outbox: 'saga_outbox',
-}
 
 type RunRow = { id: string; status: string; output: string | null }
 type CancelRow = { cancel_requested: number }

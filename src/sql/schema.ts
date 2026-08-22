@@ -100,6 +100,13 @@ export const schemaStatements: readonly string[] = schemaSql
   .map((statement) => statement.trim())
   .filter((statement) => statement.length > 0)
 
+/** What the three tables are called when nobody says otherwise. */
+export const defaultTableNames = {
+  runs: 'saga_runs',
+  steps: 'saga_run_steps',
+  outbox: 'saga_outbox',
+} as const
+
 /**
  * The same schema with the table names replaced. `createSqlJournal` lets a caller rename the
  * three tables, and the DDL has to follow or `migrate()` would create tables the journal never

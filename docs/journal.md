@@ -7,6 +7,26 @@ absolutely, and that is what this page is about — and what
 Shipped adapters: `@bayraak/sagaflow/memory`, `@bayraak/sagaflow/sql` (with `sagaflow/d1` and `@bayraak/sagaflow/sqlite`
 drivers). The reference DDL is [`src/sql/schema.sql`](../src/sql/schema.sql).
 
+## Getting them in place
+
+```ts
+await createSqliteJournal(db).migrate()
+```
+
+Every statement is `if not exists`, so running it twice is running it once — which matters
+because the honest place to call it is at the top of a process or in a test's setup, where nobody
+is tracking whether it has run before. It honours renamed tables, since creating tables the
+journal never writes to would be worse than creating none.
+
+For a real migration tool, the same SQL as a file:
+
+```bash
+bunx sagaflow schema > migrations/0001_sagaflow.sql
+bunx sagaflow schema --tables runs=flow_runs,steps=flow_steps,outbox=flow_outbox
+```
+
+D1 is SQLite, so `--dialect d1` and `--dialect sqlite` print the same DDL.
+
 ## The three tables
 
 `saga_runs`, `saga_run_steps`, `saga_outbox` by default; pass `tables` to `createSqlJournal` if

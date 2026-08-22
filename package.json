@@ -21,6 +21,9 @@
     "type": "git",
     "url": "git+https://github.com/bayraak/sagaflow.git"
   },
+  "bin": {
+    "sagaflow": "./dist/bin.js"
+  },
   "files": [
     "dist",
     "README.md",
