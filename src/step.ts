@@ -11,6 +11,25 @@ export const defaultStepConfig: StepRetryConfig = {
   timeout: '2 minutes',
 }
 
+/**
+ * Names the engine uses for its own steps. A caller's step under one of these would be handed
+ * the engine's memoised result on a replay — or would hand the engine its own — so the name is
+ * refused at definition time rather than debugged at three in the morning.
+ */
+export const reservedStepNames = ['emit-events', 'finish-run'] as const
+
+const compensationPrefix = 'compensate:'
+
+const assertNameIsAvailable = (name: string) => {
+  if ((reservedStepNames as ReadonlyArray<string>).includes(name)) {
+    throw new Error(`"${name}" is a reserved step name`)
+  }
+
+  if (name.startsWith(compensationPrefix)) {
+    throw new Error(`a step name may not start with "${compensationPrefix}" — it is reserved`)
+  }
+}
+
 export const createStep = <Ctx, Input, Output, Compensation = never>(
   name: string,
   invoke: (
@@ -19,7 +38,11 @@ export const createStep = <Ctx, Input, Output, Compensation = never>(
   ) => Promise<{ output: Output; compensateWith?: Compensation }>,
   compensate?: (compensateWith: Compensation, ctx: StepContext<Ctx>) => Promise<void>,
   config: StepRetryConfig = defaultStepConfig,
-): Step<Ctx, Input, Output, Compensation> => ({ name, config, invoke, compensate })
+): Step<Ctx, Input, Output, Compensation> => {
+  assertNameIsAvailable(name)
+
+  return { name, config, invoke, compensate }
+}
 
 /**
  * One definition, used more than once in one run. A durable engine keys its journal by STEP
@@ -38,8 +61,8 @@ export const namedStep = <Ctx, Input, Output, Compensation>(
   step: Step<Ctx, Input, Output, Compensation>,
   name: string,
   config?: StepRetryConfig,
-): Step<Ctx, Input, Output, Compensation> => ({
-  ...step,
-  name,
-  ...(config === undefined ? {} : { config }),
-})
+): Step<Ctx, Input, Output, Compensation> => {
+  assertNameIsAvailable(name)
+
+  return { ...step, name, ...(config === undefined ? {} : { config }) }
+}

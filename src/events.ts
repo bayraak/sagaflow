@@ -36,14 +36,27 @@ export const validateEmission = (
   return validateSync(schema, payload, `the payload of "${type}"`)
 }
 
+/**
+ * A raw emission, before the engine has decided where in the run it sits. A step's emissions
+ * travel home inside its memoised result, so they must be plain data — the id is assigned by
+ * the engine afterwards, from a counter that a replay arrives at the same way.
+ */
+export type RawEvent = { type: string; payload: unknown }
+
+/**
+ * The id is the run and the emission's position in it, never a random one. That is what makes
+ * a second write of the same run's events land on the rows that already exist instead of
+ * handing the consumer a copy it has never seen an id for.
+ */
 export const createEnvelope = (options: {
   type: string
   payload: unknown
   tenantId: string
   actor: string | null
   runId: string
+  ordinal: number
 }): EventEnvelope => ({
-  id: crypto.randomUUID(),
+  id: `${options.runId}:${options.ordinal}`,
   type: options.type,
   payload: options.payload,
   tenantId: options.tenantId,

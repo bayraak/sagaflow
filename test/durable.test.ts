@@ -53,6 +53,7 @@ describe('the durable executor drives the same body through step primitives', ()
     expect(calls.filter((call) => call.kind === 'do').map((call) => call.name)).toEqual([
       'first',
       'second',
+      'finish-run',
       'emit-events',
     ])
   })
@@ -68,6 +69,7 @@ describe('the durable executor drives the same body through step primitives', ()
       'sleep:settle',
       'waitForEvent:acknowledged',
       'do:second',
+      'do:finish-run',
       'do:emit-events',
     ])
   })
@@ -152,6 +154,7 @@ describe('the durable executor drives the same body through step primitives', ()
       'first',
       'second',
       'compensate:first',
+      'finish-run',
     ])
   })
 

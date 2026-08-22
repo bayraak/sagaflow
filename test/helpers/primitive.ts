@@ -61,3 +61,35 @@ export const createRetryingPrimitive = (options: { attempts: number }): StepPrim
   sleep: async () => undefined,
   waitForEvent: async () => undefined as never,
 })
+
+/**
+ * What a durable platform actually does on re-invocation: the body runs again from the top,
+ * and every step it reaches that has already completed is answered from the journal instead of
+ * being executed. The clone is not decoration — a real journal round-trips the value through
+ * serialisation, and anything the engine expects to get back has to survive that.
+ */
+export const createCachingPrimitive = (options: { neverCache?: string[] } = {}) => {
+  const cache = new Map<string, unknown>()
+  const calls: string[] = []
+  const executed: string[] = []
+
+  const primitive = (): StepPrimitive => ({
+    do: async (name, _config, run) => {
+      calls.push(name)
+      if (cache.has(name)) return cache.get(name) as never
+
+      executed.push(name)
+      const output = await run({ attempt: 1 })
+      // A step the platform never got to record — the isolate died between doing the work and
+      // checkpointing it — is a step the next invocation runs again. Naming those here is how
+      // a suite reproduces the crash window that matters.
+      if (!options.neverCache?.includes(name)) cache.set(name, structuredClone(output))
+
+      return output
+    },
+    sleep: async () => undefined,
+    waitForEvent: async () => undefined as never,
+  })
+
+  return { primitive, calls, executed }
+}

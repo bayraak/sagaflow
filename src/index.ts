@@ -11,7 +11,7 @@ export { lifecycleEventTypes, workflowCompletedEvent } from './events'
 export { dispatchEvents, eventBatchLimit } from './outbox'
 export { createDurableRegistry, registerDurableWorkflow, type RegisteredWorkflow } from './registry'
 export { SchemaError } from './schema'
-export { createStep, defaultStepConfig, namedStep } from './step'
+export { createStep, defaultStepConfig, namedStep, reservedStepNames } from './step'
 export { durableInstanceId, startDurableWorkflow } from './start'
 export type {
   CompensationOutcome,

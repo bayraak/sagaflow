@@ -86,7 +86,14 @@ export const createMemoryJournal = () => {
         error: params.error ?? null,
         events: params.events ?? [],
       })
-      outbox.push(...(params.events ?? []))
+      // Idempotent on the envelope's own id, exactly as the contract requires of a real table:
+      // a finish that runs a second time for the same run writes the same ids, and the second
+      // write must land on rows that already exist.
+      for (const event of params.events ?? []) {
+        if (outbox.some((existing) => existing.id === event.id)) continue
+
+        outbox.push(event)
+      }
 
       // A durable run's row was opened before the instance existed, so the row this journal
       // knows about may legitimately be absent — the update simply lands on the one row the
