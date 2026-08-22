@@ -1,206 +1,182 @@
 import { describe, expect, it } from 'bun:test'
 
-import { executeDurable, SagaError, type StepPrimitive } from 'sagaflow'
+import { emit, saga, sagaflow, sleep, step, waitForEvent } from 'sagaflow'
 import { createMemoryJournal, createMemorySink } from 'sagaflow/memory'
 import { z } from 'zod'
 
-import { defineWorkflow } from '../src/define.js'
-import { defineStep } from '../src/step.js'
+// Every example in the README lives here, compiled and run, so the first thing a reader copies
+// is the thing the suite proves. Keep the two in step: if you change one, change both.
 
-// Every example in the README lives here, compiled and run, so the first thing a reader
-// copies is the thing the suite proves. Keep the two in step: if you change one, change both.
+describe('README: the first screen', () => {
+  const seats = {
+    released: [] as string[],
+    reserve: async (seat: string) => ({ id: `seat_${seat}`, price: 4200 }),
+    release: async (id: string) => {
+      seats.released.push(id)
+    },
+  }
+  const cards = { charge: async (amount: number) => ({ chargeId: `ch_${amount}` }) }
 
-describe('README: the sixty-second example', () => {
-  it('runs, undoes itself, and says what happened', async () => {
-    // --- your application ---------------------------------------------------
-    const issued: number[] = []
-    const nextInvoiceNumber = async () => {
-      issued.push(issued.length + 1)
-
-      return issued.at(-1) as number
-    }
-    const releaseInvoiceNumber = async (number: number) => {
-      issued.splice(issued.indexOf(number), 1)
-    }
-    // ------------------------------------------------------------------------
-
-    const reserveNumber = defineStep('reserve-number', {
-      run: async (_input: { customerId: string }) => nextInvoiceNumber(),
-      undo: async (number) => releaseInvoiceNumber(number),
-    })
-
-    const createInvoice = defineWorkflow(
-      {
-        name: 'invoice.create',
-        input: z.object({ customerId: z.string() }),
-        execution: 'inline',
-      },
-      async (input, wf) => {
-        const number = await wf.step(reserveNumber, input)
-        wf.emit('invoice.created', { customerId: input.customerId, number })
-
-        return { number }
-      },
+  const createBooking = saga('booking.create', async (input: { seat: string }) => {
+    const seat = await step(
+      'reserve',
+      () => seats.reserve(input.seat),
+      (reserved) => seats.release(reserved.id),
     )
+    await step('charge', () => cards.charge(seat.price))
+    await emit('booking.created', { seatId: seat.id })
 
-    const { journal } = createMemoryJournal()
-    const { sink } = createMemorySink()
+    return seat
+  })
 
-    const result = await createInvoice.run({
-      input: { customerId: 'cus_1' },
-      ctx: { tenantId: 'acme', journal, events: sink },
-    })
+  it('runs', async () => {
+    const journal = createMemoryJournal()
+    const sink = createMemorySink()
+    const flow = sagaflow({ journal: journal.journal, events: sink.sink })
 
-    expect(result.deduplicated).toBe(false)
-    expect(!result.deduplicated && result.output).toEqual({ number: 1 })
-    expect(issued).toEqual([1])
+    const booked = await createBooking({ seat: '12A' }, flow)
+
+    expect(booked).toEqual({ id: 'seat_12A', price: 4200 })
+    expect(journal.runs[0]).toMatchObject({ name: 'booking.create', status: 'completed' })
+    expect(sink.sent.map((event) => event.type)).toEqual(['booking.created', 'workflow.completed'])
   })
 })
 
-describe('README: compensation leaves a trail', () => {
+describe('README: undoing leaves a trail', () => {
   it('undoes in reverse and records every leg of it', async () => {
-    const charged: string[] = []
     const refunded: string[] = []
+    const journal = createMemoryJournal()
+    const flow = sagaflow({ journal: journal.journal })
 
-    const charge = defineStep('charge-card', {
-      run: async (_input: { customerId: string; amount: number }, ctx) => {
-        charged.push(ctx.idempotencyKey)
-
-        return { chargeId: 'ch_1' }
-      },
-      undo: async (receipt) => {
-        refunded.push(receipt.chargeId)
-      },
-    })
-
-    const ship = defineStep('ship-order', {
-      run: async () => {
-        throw new Error('out of stock')
-      },
-    })
-
-    const placeOrder = defineWorkflow(
-      {
-        name: 'order.place',
-        input: z.object({ customerId: z.string(), amount: z.number() }),
-        execution: 'inline',
-      },
-      async (input, wf) => {
-        await wf.step(charge, input)
-        await wf.step(ship, input)
+    const placeOrder = saga(
+      'order.place',
+      { input: z.object({ customerId: z.string(), amount: z.number() }) },
+      async (_input) => {
+        await step(
+          'charge-card',
+          // ctx.idempotencyKey is the same on every attempt and every replay of this step. Hand
+          // it to your provider's idempotency header and a retry stops being a second charge.
+          async (ctx) => ({ chargeId: `ch_${ctx.idempotencyKey}` }),
+          (receipt) => {
+            refunded.push(receipt.chargeId)
+          },
+        )
+        await step('ship-order', async () => {
+          throw new Error('out of stock')
+        })
 
         return { placed: true }
       },
     )
 
-    const { journal, runs, steps } = createMemoryJournal()
+    const result = await placeOrder.try({ customerId: 'cus_1', amount: 4200 }, flow)
 
-    const failure = await placeOrder
-      .run({
-        input: { customerId: 'cus_1', amount: 4200 },
-        ctx: { tenantId: 'acme', journal },
-      })
-      .catch((error: unknown) => error)
-
-    expect(failure).toBeInstanceOf(SagaError)
-    expect(refunded).toEqual(['ch_1'])
-    expect(runs[0]?.status).toBe('compensated')
-    expect(steps.map((row) => [row.name, row.status])).toEqual([
+    expect(result).toMatchObject({
+      ok: false,
+      outcome: 'compensated',
+      failedStep: 'ship-order',
+      compensated: ['charge-card'],
+    })
+    expect(refunded).toEqual([`ch_${journal.runs[0]?.id}:0`])
+    expect(journal.steps.map((row) => [row.name, row.status])).toEqual([
       ['charge-card', 'completed'],
       ['ship-order', 'failed'],
       ['compensate:charge-card', 'compensated'],
     ])
-    // The charge saw a key it will see again on every retry and every replay of that step.
-    expect(charged).toEqual([`${runs[0]?.id}:0`])
   })
 })
 
 describe('README: the same request asked twice', () => {
   it('does the work once and answers the second caller with the first result', async () => {
     let sent = 0
+    const journal = createMemoryJournal()
+    const flow = sagaflow({ journal: journal.journal })
 
-    const send = defineStep('send-email', {
-      run: async () => {
-        sent += 1
-      },
-    })
-
-    const sendReceipt = defineWorkflow(
-      {
-        name: 'receipt.send',
-        input: z.object({ invoiceId: z.string() }),
-        execution: 'inline',
-        idempotency: (input) => `receipt.send:${input.invoiceId}`,
-      },
-      async (input, wf) => {
-        await wf.step(send, input)
+    const sendReceipt = saga(
+      'receipt.send',
+      { input: z.object({ invoiceId: z.string() }), idempotent: true },
+      async (input) => {
+        await step('send-email', async () => {
+          sent += 1
+        })
 
         return { sent: input.invoiceId }
       },
     )
 
-    const { journal } = createMemoryJournal()
-    const ctx = { tenantId: 'acme', journal }
-
-    const first = await sendReceipt.run({ input: { invoiceId: 'inv_1' }, ctx })
-    const second = await sendReceipt.run({ input: { invoiceId: 'inv_1' }, ctx })
+    await sendReceipt({ invoiceId: 'inv_1' }, flow)
+    await sendReceipt({ invoiceId: 'inv_1' }, flow)
 
     expect(sent).toBe(1)
-    expect(second.deduplicated).toBe(true)
-    expect(second.runId).toBe(first.runId)
-    expect(second.output).toEqual({ sent: 'inv_1' })
+    expect(journal.runs).toHaveLength(1)
   })
 })
 
-describe('README: a durable workflow that waits', () => {
-  it('sleeps, waits for a signal, and is driven in a test by a fake platform', async () => {
-    const reminded: string[] = []
+describe('README: a durable saga that waits', () => {
+  it('is declared with durable: true and started, not called', async () => {
+    const journal = createMemoryJournal()
+    const created: unknown[] = []
+    const flow = sagaflow({
+      journal: journal.journal,
+      launcher: {
+        create: async (instance) => {
+          created.push(instance)
 
-    const remind = defineStep('send-reminder', {
-      run: async (input: { invoiceId: string }) => {
-        reminded.push(input.invoiceId)
+          return { id: instance.id ?? 'x' }
+        },
       },
     })
 
-    const chase = defineWorkflow(
-      {
-        name: 'invoice.chase',
-        input: z.object({ invoiceId: z.string() }),
-        execution: 'durable',
-      },
-      async (input, wf) => {
-        await wf.sleep('grace-period', '7 days')
-        const paid = await wf.waitForEvent<{ paid: boolean }>('payment', {
+    const chaseInvoice = saga(
+      'invoice.chase',
+      { input: z.object({ invoiceId: z.string() }), durable: true },
+      async (input) => {
+        await sleep('grace-period', '7 days')
+        const paid = await waitForEvent<{ paid: boolean }>('payment', {
           type: 'invoice.paid',
           timeout: '30 days',
         })
 
         if (paid.paid) return { chased: false }
 
-        await wf.step(remind, input)
+        await step('send-reminder', async () => ({ reminded: input.invoiceId }))
 
         return { chased: true }
       },
     )
 
-    // The testing recipe from the README: a StepPrimitive that just runs the body drives a
-    // durable definition with no platform at all.
-    const platform: StepPrimitive = {
-      do: async (_name, _config, run) => run({ attempt: 1 }),
-      sleep: async () => undefined,
-      waitForEvent: async () => ({ paid: false }) as never,
-    }
+    const started = await chaseInvoice.start({ invoiceId: 'inv_1' }, flow)
 
-    const { journal } = createMemoryJournal()
+    expect(started.deduplicated).toBe(false)
+    expect(journal.runs[0]).toMatchObject({ name: 'invoice.chase', execution: 'durable' })
+    expect(created).toHaveLength(1)
+  })
+})
 
-    const output = await executeDurable(
-      chase,
-      { runId: 'run_1', input: { invoiceId: 'inv_1' } },
-      { tenantId: 'acme', journal },
-      platform,
-    )
+describe('README: a saga inside a saga', () => {
+  it('joins the caller rather than opening a second run', async () => {
+    const journal = createMemoryJournal()
+    const flow = sagaflow({ journal: journal.journal })
 
-    expect(output).toEqual({ chased: true })
-    expect(reminded).toEqual(['inv_1'])
+    const chargeCard = saga('charge', async (input: { amount: number }) => {
+      await step('authorise', async () => ({ chargeId: `ch_${input.amount}` }))
+
+      return step('capture', async () => ({ captured: true }))
+    })
+
+    const placeOrder = saga('order.place-nested', async () => {
+      await step('reserve', async () => ({ id: 'seat_1' }))
+
+      return chargeCard({ amount: 4200 })
+    })
+
+    await placeOrder(undefined, flow)
+
+    expect(journal.runs).toHaveLength(1)
+    expect(journal.steps.map((row) => row.name)).toEqual([
+      'reserve',
+      'charge/authorise',
+      'charge/capture',
+    ])
   })
 })

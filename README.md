@@ -37,68 +37,53 @@ bun add sagaflow    # or: npm i sagaflow / pnpm add sagaflow
 ```
 
 ```ts
-import { createStep, defineWorkflow } from 'sagaflow'
-import { createMemoryJournal, createMemorySink } from 'sagaflow/memory'
-import { z } from 'zod'
+import { saga, step, emit } from 'sagaflow'
 
-// --- your application ---------------------------------------------------
-const issued: number[] = []
-const nextInvoiceNumber = async () => {
-  issued.push(issued.length + 1)
+const createBooking = saga('booking.create', async (input: { seat: string }) => {
+  const seat = await step(
+    'reserve',
+    () => seats.reserve(input.seat),
+    (reserved) => seats.release(reserved.id),
+  )
+  await step('charge', () => cards.charge(seat.price))
+  await emit('booking.created', { seatId: seat.id })
 
-  return issued.at(-1) as number
-}
-const releaseInvoiceNumber = async (number: number) => {
-  issued.splice(issued.indexOf(number), 1)
-}
-// ------------------------------------------------------------------------
-
-const reserveNumber = createStep(
-  'reserve-number',
-  async (_input: { customerId: string }) => {
-    const number = await nextInvoiceNumber()
-
-    return { output: number, compensateWith: number }
-  },
-  async (number) => releaseInvoiceNumber(number),
-)
-
-const createInvoice = defineWorkflow(
-  {
-    name: 'invoice.create',
-    input: z.object({ customerId: z.string() }),
-    execution: 'inline',
-  },
-  async (input, wf) => {
-    const number = await wf.step(reserveNumber, input)
-    wf.emit('invoice.created', { customerId: input.customerId, number })
-
-    return { number }
-  },
-)
-
-const { journal } = createMemoryJournal()
-const { sink } = createMemorySink()
-
-const result = await createInvoice.run({
-  input: { customerId: 'cus_1' },
-  ctx: { tenantId: 'acme', journal, events: sink },
+  return seat
 })
+
+await createBooking({ seat: '12A' })
 ```
 
-Or declare a step where you use it, which is what most steps want:
+That is a complete saga: a step that knows how to undo itself, a run record, and an event
+written down atomically with the run and delivered afterwards. It runs with nothing configured —
+in memory, with one line telling you so. When you are ready:
 
 ```ts
-const invoice = await wf.step('reserve-number', async (ctx) => nextInvoiceNumber(ctx.tenantId), {
-  compensate: async (number) => releaseInvoiceNumber(number),
-})
+import { sagaflow } from 'sagaflow'
+import { createSqliteJournal } from 'sagaflow/sqlite'
+
+const flow = sagaflow({ journal: createSqliteJournal(db), events: queue })
+
+await createBooking({ seat: '12A' }, flow.for({ tenantId: 'acme', actor: user.id }))
 ```
 
-Same engine path either way: same sequence, same record, same memoisation, same guards.
+Not one line of the saga changes.
 
-That is a complete saga: validated input, a step that knows how to undo itself, a run record,
-and an event that is written down atomically with the run and delivered afterwards. Swap
-`sagaflow/memory` for a real journal and nothing above changes.
+**Verbs are awaited, reads are not.** `step`, `all`, `emit`, `sleep` and `waitForEvent` return
+promises and every example awaits them; `ctx()` and `runId()` are plain reads. A step you start
+and forget to await fails the run by name rather than letting it be recorded as completed while
+it was still going — turn on `@typescript-eslint/no-floating-promises` and it never happens.
+
+**Your workflow is an async function. `if`, `for` and `await` are the DSL.** There is no
+transform, no `when`, no parallelize; a named parallel group is the one exception, and only
+because the engine has to own it:
+
+```ts
+const [invoice, receipt] = await all('paperwork', [
+  () => step('invoice', () => render(order)),
+  () => step('receipt', () => stamp(order)),
+])
+```
 
 Every example in this README is compiled and executed by the test suite
 ([`test/readme-example.test.ts`](./test/readme-example.test.ts)).
@@ -197,14 +182,14 @@ identity on every message and an outbox that never loses one.
 
 ## Concepts
 
-|                    |                                                                                                                                                           |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Step**           | A unit of work that knows how to undo itself. Returns `{ output, compensateWith }`; the undo is registered from the returned value, never from a closure. |
-| **Workflow**       | A named definition with a validated input, a body, and an execution mode.                                                                                 |
-| **Run**            | One execution of a workflow. Has an id, a status, an input, an output, and a step trail.                                                                  |
-| **Journal**        | Where runs, steps and the outbox live. A contract with adapters — your tables, not ours.                                                                  |
-| **Sink**           | Where events go. Structurally a Cloudflare Queue: `{ sendBatch }`.                                                                                        |
-| **Step primitive** | How a durable platform runs a step. Cloudflare Workflows is the shipped one.                                                                              |
+|                    |                                                                                                                                                                |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Step**           | A unit of work that knows how to undo itself. The undo is handed exactly what the step returned, and is registered from that value rather than from a closure. |
+| **Workflow**       | A named definition with a validated input, a body, and an execution mode.                                                                                      |
+| **Run**            | One execution of a workflow. Has an id, a status, an input, an output, and a step trail.                                                                       |
+| **Journal**        | Where runs, steps and the outbox live. A contract with adapters — your tables, not ours.                                                                       |
+| **Sink**           | Where events go. Structurally a Cloudflare Queue: `{ sendBatch }`.                                                                                             |
+| **Step primitive** | How a durable platform runs a step. Cloudflare Workflows is the shipped one.                                                                                   |
 
 A run walks its steps, holds what it emits, and closes:
 
@@ -233,61 +218,83 @@ Same definition, two executors. Choose **durable** when any of these hold, **inl
 - fan-out
 - it must survive a crash
 
-Inline is for short mutations against your own database — a document save on blur stays snappy
-because the answer comes back in the same request. It runs anywhere: Bun, Node, Deno, any
+Inline is the default, because inline is what most mutations are — a document save on blur stays
+snappy because the answer comes back in the same request. It runs anywhere: Bun, Node, Deno, any
 framework, any journal, no infrastructure.
 
-Durable mode needs a `StepPrimitive`. Cloudflare Workflows is the one that ships.
+Durable needs a `StepPrimitive`. Cloudflare Workflows is the one that ships.
 
-The difference is a compile error, not a convention: an inline definition has `.run()` because
-the caller is still holding the request open; a durable one does not — it is started with
-`startDurableWorkflow` and an instance runs it later. Only a durable body has `sleep` and
-`waitForEvent`.
+The difference is a compile error, not a convention. An inline definition is **called**; a
+durable one has `.start()` and no call signature worth using, and only a durable body may sleep
+or wait:
 
 ```ts
-const chase = defineWorkflow(
-  {
-    name: 'invoice.chase',
-    input: z.object({ invoiceId: z.string() }),
-    execution: 'durable',
-  },
-  async (input, wf) => {
-    await wf.sleep('grace-period', '7 days')
-    const paid = await wf.waitForEvent<{ paid: boolean }>('payment', {
+import { saga, sleep, step, waitForEvent } from 'sagaflow'
+
+const chaseInvoice = saga(
+  'invoice.chase',
+  { input: z.object({ invoiceId: z.string() }), durable: true },
+  async (input) => {
+    await sleep('grace-period', '7 days')
+    const paid = await waitForEvent<{ paid: boolean }>('payment', {
       type: 'invoice.paid',
       timeout: '30 days',
     })
 
     if (paid.paid) return { chased: false }
 
-    await wf.step(remind, input)
+    await step('send-reminder', () => remind(input.invoiceId))
 
     return { chased: true }
   },
 )
+
+await chaseInvoice.start({ invoiceId: 'inv_1' }, flow)
 ```
 
----
+## A saga inside a saga
 
-## Compensation leaves a trail
+Call one from inside another and it is not a second run. Its steps join the caller's trail under
+its own name, its undos join the caller's chain, and its events are held with the caller's:
 
 ```ts
-const charge = createStep(
-  'charge-card',
-  async (input: { customerId: string; amount: number }, ctx) => {
-    // ctx.idempotencyKey is `${runId}:${seq}` — the same on every attempt and every replay of
-    // this step. Hand it to your provider's idempotency header.
-    const chargeId = await payments.charge(input, { idempotencyKey: ctx.idempotencyKey })
+const chargeCard = saga('charge', async (input: { amount: number }) => {
+  await step('authorise', () => payments.authorise(input.amount))
 
-    return { output: { chargeId }, compensateWith: chargeId }
-  },
-  async (chargeId) => payments.refund(chargeId),
-)
+  return step('capture', () => payments.capture())
+})
 
-const ship = createStep('ship-order', async () => {
-  throw new Error('out of stock')
+const placeOrder = saga('order.place', async (input: { seat: string }) => {
+  await step('reserve', () => seats.reserve(input.seat))
+
+  return chargeCard({ amount: 4200 })
 })
 ```
+
+The trail reads `reserve`, `charge/authorise`, `charge/capture`. One run, one compensation
+chain. Called from outside a saga, `chargeCard` runs on its own as usual. There is no API for
+this because it needed none.
+
+## Undoing leaves a trail
+
+```ts
+const placeOrder = saga('order.place', async (input: { customerId: string; amount: number }) => {
+  await step(
+    'charge-card',
+    // ctx.idempotencyKey is `${runId}:${seq}` — the same on every attempt and every replay of
+    // this step. Hand it to your provider's idempotency header.
+    (ctx) => payments.charge(input, { idempotencyKey: ctx.idempotencyKey }),
+    (receipt) => payments.refund(receipt.chargeId),
+  )
+  await step('ship-order', () => warehouse.ship(input))
+
+  return { placed: true }
+})
+```
+
+**One rule about undo data: the undo is handed exactly what the step returned.** A step that
+needs something extra to undo itself returns it, and then its value says everything about what it
+did — which is also what the run record holds and what the body was given.
 
 When `ship-order` throws, the run undoes what it did and writes down every leg of it:
 
@@ -297,58 +304,71 @@ When `ship-order` throws, the run undoes what it did and writes down every leg o
 | 1   | `ship-order`             | failed      |
 | 2   | `compensate:charge-card` | compensated |
 
-and the run closes `compensated`. Had the refund itself refused, the run would close **failed**
-— because `compensated` tells a reader the customer was left whole, and they were not.
+and the run closes `compensated`. Had the refund itself refused, the run would close **failed** —
+because `compensated` tells a reader the customer was left whole, and they were not.
 
-Undos run in reverse **start** order. Under `Promise.all` that is not the same as reverse
+Undos run in reverse **start** order. Under concurrency that is not the same as reverse
 completion order, and start order is the one that is stable: a durable re-invocation answers
-completed steps from the journal instantly, so they finish in the order they were called and a
-completion-ordered unwind would differ between the first invocation and the second.
+completed steps from the journal instantly, so a completion-ordered unwind would differ between
+the first invocation and the second.
 
----
+The word is **undo** everywhere you write it. The status column and the lifecycle event say
+`compensated`, because that is what the literature calls it and what the row means.
+
+### Deciding rather than catching
+
+```ts
+const result = await placeOrder.try(input, flow)
+
+if (!result.ok) {
+  logger.warn({ runId: result.runId, failed: result.failedStep, undone: result.compensated })
+
+  return reply.conflict(result.outcome)
+}
+```
+
+A saga that was undone is a normal outcome — the undo ran, the record is written, and there is a
+decision to make. `try` answers with it; the plain call throws a `SagaError` carrying the same
+summary.
 
 ## The same request, twice
 
 ```ts
-const sendReceipt = defineWorkflow(
-  {
-    name: 'receipt.send',
-    input: z.object({ invoiceId: z.string() }),
-    execution: 'inline',
-    idempotency: (input) => `receipt.send:${input.invoiceId}`,
-  },
-  async (input, wf) => {
-    await wf.step(send, input)
+const sendReceipt = saga(
+  'receipt.send',
+  { input: z.object({ invoiceId: z.string() }), idempotent: true },
+  async (input) => {
+    await step('send-email', () => mail.receipt(input.invoiceId))
 
     return { sent: input.invoiceId }
   },
 )
 
-const first = await sendReceipt.run({ input: { invoiceId: 'inv_1' }, ctx })
-const second = await sendReceipt.run({ input: { invoiceId: 'inv_1' }, ctx })
-// second.deduplicated === true, second.runId === first.runId, second.output === first.output
+await sendReceipt({ invoiceId: 'inv_1' }, flow)
+await sendReceipt({ invoiceId: 'inv_1' }, flow) // does nothing; answers with the first result
 ```
 
-The key is held by runs that are **running** or **completed**. A run that failed, compensated or
-was cancelled releases it — an invoice whose send fell over can be sent again, which is the
-whole point of asking twice.
+`idempotent: true` derives the key from the input — a canonical rendering, so key order is not
+meaning, with the saga's name in the key so two sagas given the same input do not collide. Pass a
+function instead when the key means something to somebody else, or an `idempotencyKey` per call
+when the caller knows better than the definition does.
+
+The key is held by runs that are **running** or **completed**. A run that failed, was undone or
+was cancelled releases it — an invoice whose send fell over can be sent again, which is the whole
+point of asking twice.
 
 Keys are per tenant. An input can be the same string for every tenant ("the spending report for
 March" is), and a key that left the tenant out would let the first tenant to ask claim the work
 for everybody.
 
----
-
 ## Cancellation
 
 ```ts
-import { requestCancellation } from 'sagaflow'
-
-await requestCancellation(journal, { tenantId, runId })
+await flow.cancel(runId)
 ```
 
-Cooperative, and deliberately so: nothing here can interrupt somebody else's code mid-step, and
-a library that claimed otherwise would be making the dangerous kind of promise. The request is a
+Cooperative, and deliberately so: nothing here can interrupt somebody else's code mid-step, and a
+library that claimed otherwise would be making the dangerous kind of promise. The request is a
 flag on the run record; the engine reads it back from the value `recordStep` already returns, so
 noticing it costs no extra round trip. It takes effect at the **next step boundary**: the step in
 flight finishes, no further step starts, everything already done is undone in reverse, and the
@@ -358,14 +378,12 @@ Be precise about _when_, because it matters in a durable run: the flag comes bac
 own record, so a run that is asleep or waiting for an event does not notice until it wakes and
 its **next step has finished**. That step runs, and is then undone along with everything before
 it. A body that catches the cancellation gets no further step — stopping is not the body's
-decision. Cloudflare's `terminate()` is the hard kill, and it runs no sagaflow compensations.
-
----
+decision. Cloudflare's `terminate()` is the hard kill, and it runs no sagaflow undos.
 
 ## Events and the outbox
 
-`wf.emit(type, payload)` in a body, `ctx.emit(...)` in a step. Emissions are **held** until the
-run succeeds, so a run that was undone never announces a change that did not happen. They are
+`await emit(type, payload)` anywhere in a body or a step. Emissions are **held** until the run
+succeeds, so a run that was undone never announces a change that did not happen. They are
 written into your outbox table **in the same atomic write that closes the run**, and delivered
 afterwards.
 
@@ -373,15 +391,14 @@ Declare `eventSchemas` on the runtime and `emit` is typed to your own event name
 against your own schemas:
 
 ```ts
-const ctx = {
-  tenantId,
+const flow = sagaflow({
   journal,
-  events: sink,
+  events: queue,
   eventSchemas: {
     'invoice.created': z.object({ customerId: z.string(), number: z.number() }),
     'invoice.paid': z.object({ invoiceId: z.string() }),
   },
-}
+})
 ```
 
 Two facts about the run itself are always emitted by the engine:
@@ -405,8 +422,8 @@ could not deliver, and dedupe on the envelope id at the consumer.
 ```ts
 import { sweepAbandonedRuns, sweepEventOutbox } from 'sagaflow'
 
-await sweepEventOutbox({ journal, sink, olderThanMs: 60_000 })
-await sweepAbandonedRuns(journal, { olderThanMs: 15 * 60_000 })
+await sweepEventOutbox({ journal, sink })
+await sweepAbandonedRuns({ journal, olderThanMs: 15 * 60_000 })
 ```
 
 `sweepAbandonedRuns` closes inline runs whose process died — the ones that would otherwise say
@@ -478,7 +495,28 @@ environments inherit nothing** — repeat every binding in every environment blo
 
 ## Testing
 
-A `StepPrimitive` that just runs the body drives a durable definition with no platform at all:
+A saga is an async function, so testing one is calling it:
+
+```ts
+import { createMemoryJournal, createMemorySink } from 'sagaflow/memory'
+
+const journal = createMemoryJournal()
+const sink = createMemorySink()
+const flow = sagaflow({ journal: journal.journal, events: sink.sink })
+
+await createBooking({ seat: '12A' }, flow)
+
+expect(journal.runs[0]).toMatchObject({ status: 'completed' })
+expect(journal.steps.map((row) => row.name)).toEqual(['reserve', 'charge'])
+expect(sink.sent.map((event) => event.type)).toContain('booking.created')
+```
+
+`createMemoryJournal()` hands back the journal plus the rows it holds — `runs`, `steps`,
+`finishes`, `outbox`, `dispatched` — so a test asserts on what was written rather than on which
+function was called. No clock to stub, no platform to stand up, milliseconds per test.
+
+For a **durable** definition, a `StepPrimitive` that just runs the body drives it with no
+platform at all:
 
 ```ts
 const platform: StepPrimitive = {
@@ -487,17 +525,15 @@ const platform: StepPrimitive = {
   waitForEvent: async () => ({ paid: false }) as never,
 }
 
-await executeDurable(chase, { runId, input }, ctx, platform)
+await executeDurable(definitionOf(chaseInvoice)!, { runId, input }, flow.runtime, platform)
 ```
 
-Suites that need retry or replay behaviour implement `do` accordingly — a fake that caches
-results by name reproduces exactly what a real platform does on re-invocation. Inline definitions
-need no seam at all: call `.run({ input, ctx })`.
+A fake that caches results by name reproduces exactly what a real platform does on
+re-invocation; one that calls `run` more than once reproduces retries.
 
-`createMemoryJournal()` returns the journal plus the rows it holds (`runs`, `steps`, `finishes`,
-`outbox`, `dispatched`), so a test asserts on what was written rather than on what was called.
-
----
+Writing a journal adapter? Do not write your own suite — `journalConformance` from
+`sagaflow/testing` is the contract as thirty-five executable cases, runnable under any test
+runner.
 
 ## Versioning law
 
@@ -505,10 +541,19 @@ need no seam at all: call `.run({ input, ctx })`.
 >   instances replay completed steps **by name** from the platform's journal.
 > - Version semantic changes by name (`invoice.send.v2`), let v1 instances drain, then retire it.
 
-The same rule is why a step used more than once in one run needs `namedStep(step, 'chunk-3')`:
-the journal is keyed by step name, so two uses under one name are one step to the platform — the
-second would be handed the first one's memoised result and its work would never happen.
-`createStep` refuses the names the engine uses for itself. Full rules:
+The same rule is why fan-out needs a name per item:
+
+```ts
+for (const recipient of recipients) {
+  await step(`notify-${recipient.id}`, () => mail.send(recipient))
+}
+```
+
+The journal is keyed by step name, so two uses under one name are one step to the platform — the
+second would be handed the first one's memoised result and its work would never happen. The
+engine refuses the duplicate rather than letting it happen quietly.
+A step name is refused if it is already used in this run, or if it is one the engine uses for
+itself. Full rules:
 [`docs/versioning.md`](./docs/versioning.md).
 
 ---

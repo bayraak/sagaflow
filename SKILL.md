@@ -17,69 +17,60 @@ engine. Run records and the outbox are rows in the host application's own databa
 ## The whole API
 
 ```ts
-import {
-  createStep,
-  namedStep,
-  defaultStepConfig,
-  reservedStepNames,
-  defineWorkflow,
-  executeRun,
-  executeDurable,
-  startDurableWorkflow,
-  instanceIdFor,
-  registerDurableWorkflow,
-  createDurableRegistry,
-  dispatchEvents,
-  sweepEventOutbox,
-  sweepAbandonedRuns,
-  requestCancellation,
-  WorkflowCancelledError,
-  SagaflowError,
-  WorkflowError,
-  SchemaError,
-  IdempotencyKeyHeldError,
-  messageOf,
-  lifecycleEvents,
-  stepIdempotencyKey,
-  envelopeId,
-} from 'sagaflow'
-import { createMemoryJournal, createMemorySink } from 'sagaflow/memory'
-import { journalConformance } from 'sagaflow/testing'
+// the verbs — valid only inside a saga body
+import { step, emit, all, sleep, waitForEvent, ctx, runId } from 'sagaflow'
+// declaring and configuring
+import { saga, sagaflow } from 'sagaflow'
+// operating
+import { sweepEventOutbox, sweepAbandonedRuns, SagaError, SagaCancelledError } from 'sagaflow'
+// adapters
+import { createMemoryJournal, createMemorySink, createInProcessSink } from 'sagaflow/memory'
 import { createSqlJournal } from 'sagaflow/sql'
 import { createD1Journal } from 'sagaflow/d1'
 import { createSqliteJournal } from 'sagaflow/sqlite'
+import { journalConformance } from 'sagaflow/testing'
+import {
+  createStepPrimitive,
+  createWorkflowEntrypoint,
+  sendWorkflowEvent,
+} from 'sagaflow/cloudflare'
 ```
 
-## Adding a workflow, end to end
+## Adding a saga, end to end
 
-1. **Write the steps.** Either inline, where they are used —
-   `wf.step(name, async (ctx) => value, { compensate?, retries?, timeout? })` — or reusable:
-   `createStep(name, { run, compensate?, retries?, timeout? })`. Both go down the same engine
-   path.
+1. **Write the body.** `saga(name, body)` or `saga(name, options, body)`, where the body is
+   `async (input) => value`. Inside it, `await step(name, run, undo?)` does the work. `undo`
+   receives **exactly what the step returned** — one rule, no second channel. A reusable step is
+   a plain function that calls `step()`; there is no separate constructor.
 
-   **One rule about compensation data: the undo is handed exactly what `run` returned.** A step
-   that needs something extra to undo itself returns it. Registered from the returned value and
-   never from a closure — a durable replay does not run the body again, and anything living in
-   that closure is gone.
+2. **Choose the executor.** `durable: true` if it sleeps, waits, fans out, touches the outside
+   world, takes more than roughly a second, or must survive a crash. Inline is the default and is
+   what most mutations are.
 
-2. **Compose the definition.** `defineWorkflow({ name, input, execution, output?, idempotency? }, body)`.
-   `input` and `output` are any Standard Schema (Zod, Valibot, ArkType). `idempotency` derives a
-   key from the parsed input.
-3. **Choose the executor.** Durable if it sleeps, waits, fans out, touches the outside world,
-   takes more than roughly a second, or must survive a crash. Inline otherwise.
-4. **Run it.** Inline: `definition.run({ input, ctx })`. Durable:
-   `startDurableWorkflow({ launcher: env.WORKFLOWS, definition, input, ctx })`, and put the
-   definition in `createDurableRegistry([...])` — that registry is the only thing that makes it
-   reachable by name.
-5. **Emit what it announces.** `wf.emit(type, payload)` in the body, `ctx.emit(...)` in a step.
-   Held until the run succeeds, written in the closing batch, delivered afterwards.
-6. **Test it.** Memory journal, and a fake `StepPrimitive` for durable definitions. No platform.
+3. **Declare what it needs.** `input` (any Standard Schema), `output`, `idempotent: true` or a
+   function. All optional.
+
+4. **Call it.** `await createBooking(input, flow)` runs it and answers with what the body
+   returned. `.try(input, flow)` answers instead of throwing. `.start(input, flow)` hands a
+   durable one to the configured launcher — and exists only on a durable definition.
+
+5. **Configure once.** `sagaflow({ journal, events, eventSchemas, launcher, sagas, observer })`.
+   `flow.for({ tenantId, actor, ...extras })` scopes a request; the extras reach every body
+   through `ctx()`. The tenant comes from the session, **never** from input.
+
+6. **Test it by calling it.** Memory journal, no platform, milliseconds.
 
 ```ts
-const ctx = { tenantId, actor, journal, events, eventSchemas }
+const flow = sagaflow({ journal, events, sagas: [createBooking, chaseInvoice] })
+
+await createBooking(input, flow.for({ tenantId, actor }))
 ```
 
-`tenantId` comes from the session, **never** from procedure input.
+## Verbs are awaited, reads are not
+
+`step`, `all`, `emit`, `sleep`, `waitForEvent` return promises — await every one. `ctx()` and
+`runId()` are plain reads. A step started and not awaited fails the run by name. Turn on
+`@typescript-eslint/no-floating-promises`.
 
 ## The rules the library keeps for you
 
@@ -90,11 +81,13 @@ const ctx = { tenantId, actor, journal, events, eventSchemas }
   once.
 - `finish-run` goes through the step runner, so a durable platform checkpoints it.
 - An idempotency key is held by running and completed runs and released by the rest.
-- Every step context carries `ctx.idempotencyKey` = `${runId}:${seq}` (`:undo` for a
-  compensation), stable across attempts and replays.
+- Every step's own context carries `idempotencyKey` = `${runId}:${seq}` (`:undo` for an undo),
+  stable across attempts and replays, plus `attempt`, `runId`, `tenantId`, `actor` and `ctx`.
 - A step name reused within one run is refused, on both executors.
 - `workflow.completed` and `workflow.compensated` belong to the engine; a body emitting one is
   refused.
+- A saga called inside another saga joins its trail under `child.name/step`; one run, one undo
+  chain.
 
 ## The rules you still have to keep
 
@@ -106,20 +99,20 @@ const ctx = { tenantId, actor, journal, events, eventSchemas }
 - **Never reshape a deployed durable workflow.** Renaming or reordering steps breaks in-flight
   instances, which replay completed steps by name. Version by name (`invoice.send.v2`), let the
   old one drain, then retire it.
-- **One name per use.** A step definition used twice in one run needs
-  `namedStep(step, 'chunk-3')`; otherwise the second use is handed the first one's memoised
-  result and its work never happens.
+- **One name per use.** Fan-out needs a name per item — `step(`notify-${id}`, ...)` — otherwise
+  the second use is handed the first one's memoised result and its work never happens. The engine
+  refuses the duplicate, so this is a loud failure rather than a silent one.
 - **One atomic write per step.** Cross-step consistency is the compensation chain, not a
   transaction spanning steps.
 
 ## Testing recipe
 
 ```ts
-const { journal, runs, steps, finishes, outbox, dispatched } = createMemoryJournal()
-const { sink, sent, batches } = createMemorySink()
+const journal = createMemoryJournal()
+const sink = createMemorySink()
+const flow = sagaflow({ journal: journal.journal, events: sink.sink })
 
-// inline
-await definition.run({ input, ctx: { tenantId: 'acme', journal, events: sink } })
+await createBooking({ seat: '12A' }, flow)
 
 // durable, no platform
 const platform: StepPrimitive = {
@@ -127,7 +120,7 @@ const platform: StepPrimitive = {
   sleep: async () => undefined,
   waitForEvent: async () => ({}) as never,
 }
-await executeDurable(definition, { runId, input }, ctx, platform)
+await executeDurable(definitionOf(chaseInvoice)!, { runId, input }, flow.runtime, platform)
 ```
 
 If you write a journal adapter, prove it with `journalConformance` from `sagaflow/testing` —
@@ -142,8 +135,9 @@ with rising `attempt`.
 - **Re-invocation.** A durable instance can run the same body twice for one run. Everything
   after the body must be idempotent — it is, but only because envelope ids are deterministic and
   the finish is a checkpointed step. Do not move work out of a step into the body "for speed".
-- **Fan-out without `namedStep`.** The second item silently gets the first item's result. This is
-  the single most common durable bug.
+- **Fan-out under one name.** The second item would silently get the first item's result — the
+  single most common durable bug. Refused at runtime now, but derive the name from the data and
+  never from a loop counter over an unordered collection.
 - **A step that emits and then throws.** The emission is dropped with the run, on purpose. If
   something downstream must hear about a failure, that is what `workflow.compensated` is for.
 - **`db.transaction()` on Cloudflare D1.** It type-checks and throws at runtime. A batch is the
@@ -165,4 +159,4 @@ with rising `attempt`.
 | Consumer saw an event twice         | Expected. Delivery is at-least-once; dedupe on the envelope id.                                                                                         |
 | Consumer saw an event never         | Check `dispatched_at` on the outbox row and whether the sweeper is scheduled.                                                                           |
 | Second call answered `deduplicated` | A run holds the key. It is released when the run fails, compensates or is cancelled.                                                                    |
-| A fan-out did the work once         | Missing `namedStep`.                                                                                                                                    |
+| A fan-out did the work once         | One name for every item. Derive it from the data.                                                                                                       |
