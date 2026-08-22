@@ -133,6 +133,14 @@ Six promises, each one proved by a test you can read:
 | 5   | Every run ends in exactly one of `completed \| compensated \| failed \| cancelled`. Inline runs that die mid-request are swept to `failed`; cancellation is cooperative and compensates.                                                                               | [`cancellation`](./test/cancellation.test.ts) · [`sweep`](./test/sweep.test.ts)                                                                               |
 | 6   | Every step has a **stable idempotency key** for the outside world; inputs and outputs are validated by **your own** schema library.                                                                                                                                    | [`step-idempotency-key`](./test/step-idempotency-key.test.ts) · [`schema`](./test/schema.test.ts) · [`output-schema`](./test/output-schema.test.ts)           |
 
+What it costs is counted too, and asserted exactly, in
+[`test/cost-model.test.ts`](./test/cost-model.test.ts): a three-step inline run is **five journal
+round trips** (open, one per step, close) and a sixth when there is a sink to drain to; closing a
+run is **one batch** of one update plus one row per event; recording a step and reading the
+cancellation flag is **one batch of two statements**; delivery is **one send per hundred events**;
+a re-invocation re-executes **nothing**. Those numbers are the design. A change to one of them is
+a reviewed decision, never drift.
+
 And the honest small print:
 
 | Property                              | Guarantee                                                                                                     |
