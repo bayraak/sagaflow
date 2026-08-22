@@ -12,6 +12,7 @@ import { validate } from './schema'
 import { defaultStepConfig } from './step'
 import type {
   CompensationOutcome,
+  Step,
   EmitFn,
   EventEnvelope,
   EventsOf,
@@ -47,6 +48,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   const { name, runId, ctx, runner, invoke } = options
   const held: EventEnvelope[] = []
   const undos: Undo[] = []
+  const inflight: Promise<unknown>[] = []
   let seq = 0
   let ordinal = 0
   let failedStep: string | null = null
@@ -98,88 +100,110 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     idempotencyKey,
   })
 
-  const handle: WorkflowHandle<Ctx> = {
-    emit: bodyEmit,
-    step: async (step, input) => {
-      const current = seq
-      seq += 1
-      let cancellationRequested = false
+  const runStep = async <StepInput, StepOutput, Compensation>(
+    step: Step<Ctx, StepInput, StepOutput, Compensation>,
+    input: StepInput,
+  ): Promise<StepOutput> => {
+    // Once the run has been told to stop, nothing else starts. A body is somebody else's code
+    // and somebody else's code has try/catch in it; swallowing the cancellation must not buy
+    // it another step.
+    if (cancelledAfter !== null) throw new WorkflowCancelledError(runId)
 
-      /*
-       * What a step emitted is part of what a step produced, so it travels home in the step's
-       * result and is memoised with it. On a replay the body of the step does not run and its
-       * `emit` calls never happen — an announcement kept anywhere else would be lost, and the
-       * run would close having said less the second time than the first.
-       *
-       * The compensation is registered from the returned value for the same reason, and never
-       * from a closure taken during the step: a closure does not survive a replay either.
-       */
-      const result = await runner(step.name, step.config, async ({ attempt }) => {
-        const emitted: RawEvent[] = []
+    const current = seq
+    seq += 1
+    let cancellationRequested = false
 
-        try {
-          const produced = await step.invoke(
-            input,
-            contextFor(`${runId}:${current}`, (event) => emitted.push(event)),
-          )
-          const recorded = await ctx.journal.recordStep({
-            tenantId: ctx.tenantId,
-            runId,
-            seq: current,
-            name: step.name,
-            status: 'completed',
-            attempt,
-            output: produced.output,
-          })
-          cancellationRequested = recorded.cancellationRequested
+    /*
+     * What a step emitted is part of what a step produced, so it travels home in the step's
+     * result and is memoised with it. On a replay the body of the step does not run and its
+     * `emit` calls never happen — an announcement kept anywhere else would be lost, and the
+     * run would close having said less the second time than the first.
+     *
+     * The compensation is registered from the returned value for the same reason, and never
+     * from a closure taken during the step: a closure does not survive a replay either.
+     */
+    const result = await runner(step.name, step.config, async ({ attempt }) => {
+      const emitted: RawEvent[] = []
 
-          return { ...produced, events: emitted }
-        } catch (error) {
-          failedStep = step.name
-          await ctx.journal.recordStep({
-            tenantId: ctx.tenantId,
-            runId,
-            seq: current,
-            name: step.name,
-            status: 'failed',
-            attempt,
-            error: messageOf(error),
-          })
-
-          throw error
-        }
-      })
-
-      for (const event of result.events) mint(event)
-
-      const compensate = step.compensate
-      const compensateWith = result.compensateWith
-      if (compensate && compensateWith !== undefined) {
-        undos.push({
+      try {
+        const produced = await step.invoke(
+          input,
+          contextFor(`${runId}:${current}`, (event) => emitted.push(event)),
+        )
+        const recorded = await ctx.journal.recordStep({
+          tenantId: ctx.tenantId,
+          runId,
           seq: current,
           name: step.name,
-          config: step.config,
-          // Undoing a charge is a refund, not the charge again: a different side effect, and
-          // so a different key. What an undo emits is dropped with the run it is undoing, so
-          // it is collected nowhere.
-          run: () =>
-            compensate(
-              compensateWith,
-              contextFor(`${runId}:${current}:undo`, () => undefined),
-            ),
+          status: 'completed',
+          attempt,
+          output: produced.output,
         })
+        cancellationRequested = recorded.cancellationRequested
+
+        return { ...produced, events: emitted }
+      } catch (error) {
+        failedStep = step.name
+        await ctx.journal.recordStep({
+          tenantId: ctx.tenantId,
+          runId,
+          seq: current,
+          name: step.name,
+          status: 'failed',
+          attempt,
+          error: messageOf(error),
+        })
+
+        throw error
       }
+    })
 
-      // Noticed only now, and acted on only here: a step already running is never interrupted,
-      // and the undo of the step that just finished is registered above before this throws, so
-      // a cancelled run leaves nothing standing.
-      if (cancellationRequested) {
-        cancelledAfter = step.name
+    for (const event of result.events) mint(event)
 
-        throw new WorkflowCancelledError(runId)
-      }
+    const compensate = step.compensate
+    const compensateWith = result.compensateWith
+    if (compensate && compensateWith !== undefined) {
+      undos.push({
+        seq: current,
+        name: step.name,
+        config: step.config,
+        // Undoing a charge is a refund, not the charge again: a different side effect, and
+        // so a different key. What an undo emits is dropped with the run it is undoing, so
+        // it is collected nowhere.
+        run: () =>
+          compensate(
+            compensateWith,
+            contextFor(`${runId}:${current}:undo`, () => undefined),
+          ),
+      })
+    }
 
-      return result.output
+    // Noticed only now, and acted on only here: a step already running is never interrupted,
+    // and the undo of the step that just finished is registered above before this throws, so
+    // a cancelled run leaves nothing standing.
+    if (cancellationRequested) {
+      cancelledAfter = step.name
+
+      throw new WorkflowCancelledError(runId)
+    }
+
+    return result.output
+  }
+
+  const handle: WorkflowHandle<Ctx> = {
+    emit: bodyEmit,
+    step: (step, input) => {
+      /*
+       * The engine keeps hold of every step that is still running, because `Promise.all`
+       * rejects the moment the first of them does while the others are still going. Unwinding
+       * there and then would leave a step that finished a millisecond later registering an undo
+       * with nobody left to run it: the effect stays, the run says it was compensated, and the
+       * two disagree for ever.
+       */
+      const running = runStep(step, input)
+      inflight.push(running.catch(() => undefined))
+
+      return running
     },
   }
 
@@ -194,6 +218,10 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
    * standing just because its neighbour could not be reversed.
    */
   const compensate = async (): Promise<'compensated' | 'failed'> => {
+    // Nothing is undone until everything has stopped, so that every undo there is going to be
+    // is registered before the first one runs.
+    await Promise.allSettled(inflight)
+
     let outcome: 'compensated' | 'failed' = 'compensated'
 
     for (const undo of undos.toSorted((left, right) => right.seq - left.seq)) {
@@ -237,6 +265,10 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   let output: Output
   try {
     const produced = await invoke(handle)
+
+    // Stopping is not the body's decision. A body that caught the cancellation and carried on
+    // does not get to hand back a completed run.
+    if (cancelledAfter !== null) throw new WorkflowCancelledError(runId)
 
     /*
      * A body that returns the wrong thing is a body that failed, however cheerfully it
