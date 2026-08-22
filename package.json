@@ -57,7 +57,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && cp src/d1/schema.sql dist/d1/schema.sql",
+    "build": "tsc -p tsconfig.build.json",
     "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check .",
     "lint": "oxlint src test test-workerd examples",

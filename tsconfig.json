@@ -15,7 +15,11 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "noEmit": true,
-    "types": ["bun"]
+    "types": ["bun"],
+    "paths": {
+      "sagaflow": ["./src/index.ts"],
+      "sagaflow/memory": ["./src/memory/index.ts"]
+    }
   },
   "include": ["src", "test", "test-workerd", "vitest.config.ts"]
 }
