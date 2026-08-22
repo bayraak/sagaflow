@@ -798,6 +798,7 @@ that did not happen is not announced. The run's own `workflow.compensated` is wh
 - [`docs/versioning.md`](./docs/versioning.md) — what you must never reshape
 - [`docs/comparison.md`](./docs/comparison.md) — the honest landscape
 - [`SKILL.md`](./SKILL.md) — for coding agents working in a sagaflow codebase
+- [`llms.txt`](./llms.txt) — the one-screen summary, for whatever is reading this next
 
 ## Examples
 

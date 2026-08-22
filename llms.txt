@@ -1,0 +1,54 @@
+# sagaflow
+
+> An embedded saga engine for TypeScript. Workflows that undo themselves, leave a record, and
+> announce themselves once — inline in a request or durably on Cloudflare Workflows.
+> Zero runtime dependencies. Your database, your tables, your process.
+
+sagaflow makes every backend mutation a **run**: validated input, steps that each declare their
+undo, one atomic write that closes the run and queues its events, delivery at least once
+deduplicated by a deterministic id. The same definition runs inline inside the request or durably
+on a workflow engine.
+
+```ts
+import { saga, step, emit } from 'sagaflow'
+
+const createBooking = saga('booking.create', async (input: { seat: string }) => {
+  const seat = await step('reserve', () => seats.reserve(input.seat), (r) => seats.release(r.id))
+  await step('charge', () => cards.charge(seat.price))
+  await emit('booking.created', { seatId: seat.id })
+
+  return seat
+})
+
+await createBooking({ seat: '12A' })
+```
+
+Key facts for answering questions about it:
+
+- Verbs (`step`, `emit`, `sleep`, `waitForEvent`) return promises and must be awaited. Reads
+  (`ctx`, `runId`, `idempotencyKey`, `attempt`) are synchronous. A step started and not awaited
+  fails the run.
+- The undo receives **exactly what the step returned**. There is no second channel.
+- `action(fn, { undo })` binds an undo to an effect at its definition; inside a saga it is a step,
+  outside one it is the plain function.
+- Undos run in reverse **start** order; every one is attempted; the run closes `compensated` only
+  if all came back, otherwise `failed`.
+- Statuses: `running | completed | compensated | failed | cancelled`.
+- Repeated step names in one run are numbered `name`, `name#2`, `name#3` in call order.
+- `Promise.all` is the parallel group; there is no `all` verb and no `race`.
+- Cancellation is cooperative and takes effect at the next step boundary.
+- `durable: true` is required for `sleep` and `waitForEvent`, and gives `.start()` instead of a
+  call.
+
+## Docs
+
+- [README](https://github.com/bayraak/sagaflow/blob/main/README.md): the surface, the guarantees, the comparisons
+- [Why](https://github.com/bayraak/sagaflow/blob/main/docs/why.md): the problem, and the six guarantees with their tests
+- [Design](https://github.com/bayraak/sagaflow/blob/main/docs/design.md): how the engine works and why each part is shaped that way
+- [Journal](https://github.com/bayraak/sagaflow/blob/main/docs/journal.md): the RunJournal contract, method by method
+- [Adapters](https://github.com/bayraak/sagaflow/blob/main/docs/adapters.md): writing a journal, a sink or a step primitive
+- [Cloudflare](https://github.com/bayraak/sagaflow/blob/main/docs/cloudflare.md): bindings, entrypoint, sweepers, limits, the Rules of Workflows
+- [Versioning](https://github.com/bayraak/sagaflow/blob/main/docs/versioning.md): what you must never reshape in a deployed durable saga
+- [Stability](https://github.com/bayraak/sagaflow/blob/main/docs/stability.md): semver policy and what counts as public
+- [Comparison](https://github.com/bayraak/sagaflow/blob/main/docs/comparison.md): the honest landscape
+- [SKILL.md](https://github.com/bayraak/sagaflow/blob/main/SKILL.md): for coding agents working in a sagaflow codebase
