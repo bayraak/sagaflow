@@ -1,6 +1,6 @@
-import { IdempotencyKeyHeldError } from '../errors'
-import type { EventEnvelope, RunJournal, RunStatus } from '../types'
-import { assertIs, assertRefuses, assertSame, assertThat } from './assert'
+import { IdempotencyKeyHeldError } from '../errors.js'
+import type { EventEnvelope, RunJournal, RunStatus } from '../types.js'
+import { assertIs, assertRefuses, assertSame, assertThat } from './assert.js'
 
 /**
  * A journal under test, plus the two readings a caller has to supply because the contract

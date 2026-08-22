@@ -1,5 +1,5 @@
-import { createSqlJournal, type SqlDriver, type SqlTableNames } from '../sql/index'
-import type { RunJournal } from '../types'
+import { createSqlJournal, type SqlDriver, type SqlTableNames } from '../sql/index.js'
+import type { RunJournal } from '../types.js'
 
 /**
  * Structurally `bun:sqlite`'s Database and `node:sqlite`'s DatabaseSync, narrowed to what a

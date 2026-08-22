@@ -1,4 +1,4 @@
-import type { lifecycleEvents } from './events'
+import type { lifecycleEvents } from './events.js'
 
 /**
  * The Standard Schema v1 interface, copied inline (MIT, standardschema.dev) so this package

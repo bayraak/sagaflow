@@ -1,11 +1,11 @@
-import { envelopeId } from './identity'
-import { validateSync } from './schema'
+import { envelopeId } from './identity.js'
+import { validateSync } from './schema.js'
 import type {
   CompensationOutcome,
   EventEnvelope,
   EventSchemaMap,
   LifecycleEventType,
-} from './types'
+} from './types.js'
 
 /**
  * Facts the engine states about the run itself, declared once. `LifecycleEventPayloads` in

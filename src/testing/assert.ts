@@ -1,4 +1,4 @@
-import { SagaflowError } from '../errors'
+import { SagaflowError } from '../errors.js'
 
 /**
  * The conformance suite carries its own assertions so it can be run by any test runner — bun,

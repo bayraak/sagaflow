@@ -1,7 +1,7 @@
-import type { DurableWorkflow } from './define'
-import { executeDurable } from './durable'
-import { startDurableWorkflow } from './start'
-import type { StandardSchemaV1, StepPrimitive, WorkflowLauncher, WorkflowRuntime } from './types'
+import type { DurableWorkflow } from './define.js'
+import { executeDurable } from './durable.js'
+import { startDurableWorkflow } from './start.js'
+import type { StandardSchemaV1, StepPrimitive, WorkflowLauncher, WorkflowRuntime } from './types.js'
 
 /**
  * A registered workflow is its name and two ways to reach it. Registering erases the

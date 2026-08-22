@@ -1,7 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
-import { createSqlJournal, type SqlDriver, type SqlTableNames } from '../sql/index'
-import type { RunJournal } from '../types'
+import { createSqlJournal, type SqlDriver, type SqlTableNames } from '../sql/index.js'
+import type { RunJournal } from '../types.js'
 
 /**
  * D1, made to look like the driver the journal wants.

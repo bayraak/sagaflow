@@ -1,5 +1,5 @@
-import { executeRun } from './engine'
-import { validate } from './schema'
+import { executeRun } from './engine.js'
+import { validate } from './schema.js'
 import type {
   DurableWorkflowHandle,
   InlineRunResult,
@@ -7,7 +7,7 @@ import type {
   WorkflowExecution,
   WorkflowHandle,
   WorkflowRuntime,
-} from './types'
+} from './types.js'
 
 type WorkflowConfig<Input extends StandardSchemaV1, Execution extends WorkflowExecution> = {
   name: string

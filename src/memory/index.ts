@@ -1,4 +1,4 @@
-import { IdempotencyKeyHeldError } from '../errors'
+import { IdempotencyKeyHeldError } from '../errors.js'
 import type {
   EventEnvelope,
   EventSink,
@@ -6,7 +6,7 @@ import type {
   RunOutcome,
   RunStatus,
   WorkflowExecution,
-} from '../types'
+} from '../types.js'
 
 export type MemoryRunRow = {
   id: string

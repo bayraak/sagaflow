@@ -1,5 +1,5 @@
-import { SagaflowError } from './errors'
-import type { RunJournal } from './types'
+import { SagaflowError } from './errors.js'
+import type { RunJournal } from './types.js'
 
 /**
  * What the engine throws when it finds that the run has been asked to stop. It is not a

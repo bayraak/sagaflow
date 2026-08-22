@@ -3,17 +3,27 @@ export {
   type AnyWorkflow,
   type DurableWorkflow,
   type InlineWorkflow,
-} from './define'
-export { requestCancellation, WorkflowCancelledError } from './cancel'
-export { claimRun, type RunClaim } from './claim'
-export { compensationIdempotencyKey, envelopeId, stepIdempotencyKey } from './identity'
-export { executeDurable } from './durable'
-export { executeRun, type StepRunner } from './engine'
-export { IdempotencyKeyHeldError, messageOf, SagaflowError, WorkflowError } from './errors'
-export { lifecycleEvents, lifecycleEventTypes } from './events'
-export { dispatchEvents, eventBatchLimit, eventSweepLimit, sweepEventOutbox } from './outbox'
-export { createDurableRegistry, registerDurableWorkflow, type RegisteredWorkflow } from './registry'
-export { SchemaError } from './schema'
+} from './define.js'
+export { requestCancellation, WorkflowCancelledError } from './cancel.js'
+export { claimRun, type RunClaim } from './claim.js'
+export { compensationIdempotencyKey, envelopeId, stepIdempotencyKey } from './identity.js'
+export { executeDurable } from './durable.js'
+export { executeRun, type StepRunner } from './engine.js'
+export { IdempotencyKeyHeldError, messageOf, SagaflowError, WorkflowError } from './errors.js'
+export { lifecycleEvents, lifecycleEventTypes } from './events.js'
+export {
+  dispatchEvents,
+  eventBatchLimit,
+  eventSweepGraceMs,
+  eventSweepLimit,
+  sweepEventOutbox,
+} from './outbox.js'
+export {
+  createDurableRegistry,
+  registerDurableWorkflow,
+  type RegisteredWorkflow,
+} from './registry.js'
+export { SchemaError } from './schema.js'
 export {
   compensationStepName,
   createStep,
@@ -22,9 +32,9 @@ export {
   reservedStepNames,
   type StepBudget,
   type StepOptions,
-} from './step'
-export { sweepAbandonedRuns } from './sweep'
-export { instanceIdFor, startDurableWorkflow } from './start'
+} from './step.js'
+export { abandonedSweepLimit, sweepAbandonedRuns } from './sweep.js'
+export { instanceIdFor, startDurableWorkflow } from './start.js'
 export type {
   CompensationOutcome,
   DurableWorkflowEnv,
@@ -52,4 +62,4 @@ export type {
   WorkflowHandle,
   WorkflowLauncher,
   WorkflowRuntime,
-} from './types'
+} from './types.js'

@@ -1,4 +1,4 @@
-import type { EventEnvelope, EventSink, RunJournal } from './types'
+import type { EventEnvelope, EventSink, RunJournal } from './types.js'
 
 /**
  * What one batched send carries. A drain larger than this is more than one call, and the
@@ -41,6 +41,13 @@ export const dispatchEvents = async (options: {
 export const eventSweepLimit = 500
 
 /**
+ * How long a row is left for the run that made it. A row written a moment ago almost certainly
+ * belongs to a run whose own drain is still in flight; waiting a minute costs a minute and
+ * saves a duplicate delivery.
+ */
+export const eventSweepGraceMs = 60_000
+
+/**
  * The other half of the outbox: what comes back for the events a run's own drain could not
  * deliver. The drain is best-effort by design — the mutation committed, and a queue that could
  * not be reached is not the caller's problem — and this is what makes that true.
@@ -61,7 +68,7 @@ export const sweepEventOutbox = async (options: {
   limit?: number
 }): Promise<number> => {
   const stranded = await options.journal.listUndispatchedEvents({
-    before: (options.now ?? Date.now()) - (options.olderThanMs ?? 0),
+    before: (options.now ?? Date.now()) - (options.olderThanMs ?? eventSweepGraceMs),
     limit: options.limit ?? eventSweepLimit,
   })
 

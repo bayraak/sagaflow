@@ -1,4 +1,4 @@
-import type { Step, StepBackoff, StepContext, StepRetryConfig } from './types'
+import type { Step, StepBackoff, StepContext, StepRetryConfig } from './types.js'
 
 /**
  * What a step is worth retrying for, when nothing says otherwise. Cloudflare's own default is

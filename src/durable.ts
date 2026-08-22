@@ -1,12 +1,12 @@
-import type { DurableWorkflow } from './define'
-import { executeRun } from './engine'
-import { validate } from './schema'
+import type { DurableWorkflow } from './define.js'
+import { executeRun } from './engine.js'
+import { validate } from './schema.js'
 import type {
   DurableWorkflowHandle,
   StandardSchemaV1,
   StepPrimitive,
   WorkflowRuntime,
-} from './types'
+} from './types.js'
 
 /**
  * The same body the inline executor would run, driven through a durable platform's step

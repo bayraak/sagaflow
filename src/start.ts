@@ -1,9 +1,9 @@
-import { claimRun } from './claim'
-import type { DurableWorkflow } from './define'
-import { messageOf } from './errors'
-import { compensatedEnvelope } from './events'
-import { validate } from './schema'
-import type { StandardSchemaV1, WorkflowLauncher, WorkflowRuntime } from './types'
+import { claimRun } from './claim.js'
+import type { DurableWorkflow } from './define.js'
+import { messageOf } from './errors.js'
+import { compensatedEnvelope } from './events.js'
+import { validate } from './schema.js'
+import type { StandardSchemaV1, WorkflowLauncher, WorkflowRuntime } from './types.js'
 
 const instanceIdPrefix = 'wf-'
 const instanceIdLimit = 100

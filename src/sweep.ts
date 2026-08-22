@@ -1,5 +1,5 @@
-import { compensatedEnvelope } from './events'
-import type { RunJournal } from './types'
+import { compensatedEnvelope } from './events.js'
+import type { RunJournal } from './types.js'
 
 /** How many abandoned runs one sweep closes. The next sweep takes the rest. */
 export const abandonedSweepLimit = 200

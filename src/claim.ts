@@ -1,5 +1,5 @@
-import { IdempotencyKeyHeldError } from './errors'
-import type { RunJournal, RunStatus } from './types'
+import { IdempotencyKeyHeldError } from './errors.js'
+import type { RunJournal, RunStatus } from './types.js'
 
 export type RunClaim =
   | { claimed: true; runId: string }

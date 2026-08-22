@@ -1,4 +1,4 @@
-import type { CompensationOutcome } from './types'
+import type { CompensationOutcome } from './types.js'
 
 export const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)

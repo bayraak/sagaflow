@@ -1,10 +1,10 @@
-import { WorkflowCancelledError } from './cancel'
-import { messageOf, WorkflowError } from './errors'
-import { createEnvelope, lifecycleEvents, validateEmission, type RawEvent } from './events'
-import { compensationIdempotencyKey, stepIdempotencyKey } from './identity'
-import { dispatchEvents } from './outbox'
-import { validate } from './schema'
-import { compensationStepName, defaultStepConfig, reservedStepNames } from './step'
+import { WorkflowCancelledError } from './cancel.js'
+import { messageOf, WorkflowError } from './errors.js'
+import { createEnvelope, lifecycleEvents, validateEmission, type RawEvent } from './events.js'
+import { compensationIdempotencyKey, stepIdempotencyKey } from './identity.js'
+import { dispatchEvents } from './outbox.js'
+import { validate } from './schema.js'
+import { compensationStepName, defaultStepConfig, reservedStepNames } from './step.js'
 import type {
   CompensationOutcome,
   Step,
@@ -16,7 +16,7 @@ import type {
   StepRetryConfig,
   WorkflowHandle,
   WorkflowRuntime,
-} from './types'
+} from './types.js'
 
 /**
  * The one difference between the two executors: how a unit of work is carried out. Inline

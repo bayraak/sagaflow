@@ -1,5 +1,5 @@
-import { SagaflowError } from './errors'
-import type { StandardSchemaV1 } from './types'
+import { SagaflowError } from './errors.js'
+import type { StandardSchemaV1 } from './types.js'
 
 const describePath = (issue: StandardSchemaV1.Issue): string => {
   if (!issue.path || issue.path.length === 0) return ''

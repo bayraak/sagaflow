@@ -43,7 +43,7 @@ describe('sweeping the events a drain could not deliver', () => {
     ])
     const { sink, sent } = createMemorySink()
 
-    const delivered = await sweepEventOutbox({ journal: journal.journal, sink, now: 1000 })
+    const delivered = await sweepEventOutbox({ journal: journal.journal, sink, now: 100_000 })
 
     expect(delivered).toBe(2)
     expect(sent.map((message) => message.id)).toEqual(['run_1:0', 'run_1:1'])
@@ -55,11 +55,11 @@ describe('sweeping the events a drain could not deliver', () => {
     ])
     const { sink } = createMemorySink()
 
-    await sweepEventOutbox({ journal: journal.journal, sink, now: 1000 })
+    await sweepEventOutbox({ journal: journal.journal, sink, now: 100_000 })
     const second = await sweepEventOutbox({
       journal: journal.journal,
       sink: createMemorySink().sink,
-      now: 1000,
+      now: 100_000,
     })
 
     expect(journal.dispatched).toEqual(['run_1:0'])
@@ -75,7 +75,7 @@ describe('sweeping the events a drain could not deliver', () => {
     ])
     const { sink, batches } = createMemorySink()
 
-    const delivered = await sweepEventOutbox({ journal: journal.journal, sink, now: 1000 })
+    const delivered = await sweepEventOutbox({ journal: journal.journal, sink, now: 100_000 })
 
     expect(delivered).toBe(2)
     expect(batches.map((batch) => batch.map((message) => message.tenantId))).toEqual([
@@ -86,7 +86,7 @@ describe('sweeping the events a drain could not deliver', () => {
 
   // A row written a moment ago probably belongs to a run whose own drain is still in flight.
   // Leaving it for the next sweep costs a few minutes and saves a duplicate delivery.
-  it('leaves rows younger than the window for the run that made them', async () => {
+  it('leaves rows younger than the window for the run that made them, by default too', async () => {
     const journal = await withStrandedEvents([
       envelope({ tenantId: 'tenant_a', ordinal: 0, occurredAt: 100 }),
       envelope({ tenantId: 'tenant_a', ordinal: 1, occurredAt: 990 }),
@@ -112,7 +112,9 @@ describe('sweeping the events a drain could not deliver', () => {
     ])
     const { sink } = createMemorySink()
 
-    expect(await sweepEventOutbox({ journal: journal.journal, sink, now: 1000, limit: 2 })).toBe(2)
+    expect(await sweepEventOutbox({ journal: journal.journal, sink, now: 100_000, limit: 2 })).toBe(
+      2,
+    )
   })
 
   // A sink that is still down leaves everything exactly where it was, for the next sweep.
@@ -122,11 +124,36 @@ describe('sweeping the events a drain could not deliver', () => {
     ])
     const { sink } = createMemorySink({ refuses: true })
 
-    const delivered = await sweepEventOutbox({ journal: journal.journal, sink, now: 1000 }).catch(
-      () => -1,
-    )
+    const delivered = await sweepEventOutbox({
+      journal: journal.journal,
+      sink,
+      now: 100_000,
+    }).catch(() => -1)
 
     expect(delivered).toBe(-1)
     expect(journal.dispatched).toEqual([])
+  })
+})
+
+// The default matters more than the option: most callers will never pass a window, and a sweep
+// that raced every run's own drain would double-deliver on a healthy system rather than a
+// broken one.
+describe('the default grace period', () => {
+  it('leaves a row written a moment ago for the drain that is probably still going', async () => {
+    const journal = await withStrandedEvents([
+      envelope({ tenantId: 'tenant_a', ordinal: 0, occurredAt: 99_990 }),
+    ])
+    const { sink } = createMemorySink()
+
+    expect(await sweepEventOutbox({ journal: journal.journal, sink, now: 100_000 })).toBe(0)
+  })
+
+  it('carries it once it is a minute old', async () => {
+    const journal = await withStrandedEvents([
+      envelope({ tenantId: 'tenant_a', ordinal: 0, occurredAt: 30_000 }),
+    ])
+    const { sink } = createMemorySink()
+
+    expect(await sweepEventOutbox({ journal: journal.journal, sink, now: 100_000 })).toBe(1)
   })
 })

@@ -1,8 +1,14 @@
-import { IdempotencyKeyHeldError } from '../errors'
-import type { EventEnvelope, RunJournal, RunOutcome, RunStatus, WorkflowExecution } from '../types'
-import type { SqlDriver } from './driver'
+import { IdempotencyKeyHeldError } from '../errors.js'
+import type {
+  EventEnvelope,
+  RunJournal,
+  RunOutcome,
+  RunStatus,
+  WorkflowExecution,
+} from '../types.js'
+import type { SqlDriver } from './driver.js'
 
-export type { SqlDriver, SqlStatement } from './driver'
+export type { SqlDriver, SqlStatement } from './driver.js'
 
 /**
  * What the three tables are called. sagaflow does not own your schema — your migration tool
