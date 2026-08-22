@@ -1,0 +1,91 @@
+{
+  "name": "sagaflow",
+  "version": "0.1.0",
+  "description": "Sagas for TypeScript — compensating workflows that run inline in a request or durably on a workflow engine. Cloudflare Workflows adapter included.",
+  "keywords": [
+    "cloudflare-workflows",
+    "compensation",
+    "durable-execution",
+    "idempotency",
+    "orchestration",
+    "outbox",
+    "saga",
+    "typescript",
+    "workflow"
+  ],
+  "homepage": "https://github.com/bayraak/sagaflow#readme",
+  "bugs": "https://github.com/bayraak/sagaflow/issues",
+  "license": "MIT",
+  "author": "Bayram Ali Basgul",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bayraak/sagaflow.git"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "SKILL.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./memory": {
+      "types": "./dist/memory/index.d.ts",
+      "default": "./dist/memory/index.js"
+    },
+    "./sqlite": {
+      "types": "./dist/sqlite/index.d.ts",
+      "default": "./dist/sqlite/index.js"
+    },
+    "./d1": {
+      "types": "./dist/d1/index.d.ts",
+      "default": "./dist/d1/index.js"
+    },
+    "./cloudflare": {
+      "types": "./dist/cloudflare/index.d.ts",
+      "default": "./dist/cloudflare/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && cp src/d1/schema.sql dist/d1/schema.sql",
+    "fmt": "oxfmt --write .",
+    "fmt:check": "oxfmt --check .",
+    "lint": "oxlint src test test-workerd examples",
+    "test": "bun test",
+    "test:workerd": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^5.20260819.1",
+    "@types/bun": "1.2.22",
+    "oxfmt": "^0.44.0",
+    "oxlint": "^1.59.0",
+    "typescript": "^7.0.2",
+    "valibot": "^1.1.0",
+    "vitest": "^4.1.11",
+    "wrangler": "4.124.0",
+    "zod": "4.4.3"
+  },
+  "peerDependencies": {
+    "@cloudflare/workers-types": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "@cloudflare/workers-types": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
