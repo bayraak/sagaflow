@@ -320,6 +320,12 @@ noticing it costs no extra round trip. It takes effect at the **next step bounda
 flight finishes, no further step starts, everything already done is undone in reverse, and the
 run closes `cancelled` — or `failed`, if an undo refused.
 
+Be precise about _when_, because it matters in a durable run: the flag comes back with a step's
+own record, so a run that is asleep or waiting for an event does not notice until it wakes and
+its **next step has finished**. That step runs, and is then undone along with everything before
+it. A body that catches the cancellation gets no further step — stopping is not the body's
+decision. Cloudflare's `terminate()` is the hard kill, and it runs no sagaflow compensations.
+
 ---
 
 ## Events and the outbox
@@ -515,14 +521,16 @@ it to an agent. The durable engine is the platform's. The sweepers are your cron
 
 ## Why not X
 
-|                           | What it does that sagaflow does not                                            | What sagaflow does that it does not                                          |
-| ------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| **Temporal**              | Deterministic replay, signals/queries, child workflows, a UI, decades of scale | Runs inline in a request; no cluster; no dependencies; your tables           |
-| **Restate**               | Durable promises, virtual objects, its own runtime                             | No server to run; inline mode; compensation as a first-class concept         |
-| **Inngest / Trigger.dev** | Hosted platform, dashboards, flow control, scheduling                          | Library not platform; no vendor in the write path; your run records          |
-| **Cloudflare Workflows**  | Durability, checkpoints, retries, sleeps that survive deploys                  | Compensation, a run record you own, a transactional outbox, inline mode      |
-| **A job queue**           | Fan-out, backpressure, retries                                                 | Ordered undo, atomic outbox, per-tenant idempotency, a queryable trail       |
-| **try/catch by hand**     | Nothing to learn                                                               | The undo order, the trail, the outbox and the dedupe you were about to write |
+|                            | What it does that sagaflow does not                                            | What sagaflow does that it does not                                                              |
+| -------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| **Temporal**               | Deterministic replay, signals/queries, child workflows, a UI, decades of scale | Runs inline in a request; no cluster; no dependencies; your tables                               |
+| **Restate**                | Durable promises, virtual objects, its own runtime                             | No server to run; inline mode; compensation as a first-class concept                             |
+| **Inngest / Trigger.dev**  | Hosted platform, dashboards, flow control, scheduling                          | Library not platform; no vendor in the write path; your run records                              |
+| **Cloudflare Workflows**   | Durability, checkpoints, retries, sleeps that survive deploys                  | Compensation, a run record you own, a transactional outbox, inline mode                          |
+| **DBOS Transact**          | In-process runs that resume after a crash, on your own Postgres                | First-class compensation, an outbox, an inline mode with no durability machinery, more than Node |
+| **Vercel Workflow DevKit** | `"use workflow"` ergonomics, portable Worlds, a hosted story                   | An inline mode, an outbox for your own domain events, your tables, zero deps                     |
+| **A job queue**            | Fan-out, backpressure, retries                                                 | Ordered undo, atomic outbox, per-tenant idempotency, a queryable trail                           |
+| **try/catch by hand**      | Nothing to learn                                                               | The undo order, the trail, the outbox and the dedupe you were about to write                     |
 
 ### Why not Cloudflare's rollbacks?
 
