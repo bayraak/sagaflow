@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
-import { step, type StepBudget } from '../../src/index'
+import { type StepBudget } from '../../src/index'
+import { defineStep } from '../../src/step.js'
 import type { TestRuntime } from './runtime'
 
 export const markInput = z.object({ mark: z.string().min(1) })
@@ -19,7 +20,7 @@ export const markStep = (
     withoutCompensation?: boolean
   } = {},
 ) =>
-  step<TestRuntime, MarkInput, MarkOutput>(name, {
+  defineStep<TestRuntime, MarkInput, MarkOutput>(name, {
     run: async (input, ctx) => {
       ctx.invocations.push(`invoke:${name}`)
       if (options.fails) throw new Error(`${name} refused`)

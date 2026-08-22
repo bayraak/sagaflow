@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'bun:test'
 
-import { step, executeDurable, SagaError, type StepPrimitive } from 'sagaflow'
+import { executeDurable, SagaError, type StepPrimitive } from 'sagaflow'
 import { createMemoryJournal, createMemorySink } from 'sagaflow/memory'
 import { z } from 'zod'
 
 import { defineWorkflow } from '../src/define.js'
+import { defineStep } from '../src/step.js'
 
 // Every example in the README lives here, compiled and run, so the first thing a reader
 // copies is the thing the suite proves. Keep the two in step: if you change one, change both.
@@ -23,7 +24,7 @@ describe('README: the sixty-second example', () => {
     }
     // ------------------------------------------------------------------------
 
-    const reserveNumber = step('reserve-number', {
+    const reserveNumber = defineStep('reserve-number', {
       run: async (_input: { customerId: string }) => nextInvoiceNumber(),
       undo: async (number) => releaseInvoiceNumber(number),
     })
@@ -61,7 +62,7 @@ describe('README: compensation leaves a trail', () => {
     const charged: string[] = []
     const refunded: string[] = []
 
-    const charge = step('charge-card', {
+    const charge = defineStep('charge-card', {
       run: async (_input: { customerId: string; amount: number }, ctx) => {
         charged.push(ctx.idempotencyKey)
 
@@ -72,7 +73,7 @@ describe('README: compensation leaves a trail', () => {
       },
     })
 
-    const ship = step('ship-order', {
+    const ship = defineStep('ship-order', {
       run: async () => {
         throw new Error('out of stock')
       },
@@ -118,7 +119,7 @@ describe('README: the same request asked twice', () => {
   it('does the work once and answers the second caller with the first result', async () => {
     let sent = 0
 
-    const send = step('send-email', {
+    const send = defineStep('send-email', {
       run: async () => {
         sent += 1
       },
@@ -155,7 +156,7 @@ describe('README: a durable workflow that waits', () => {
   it('sleeps, waits for a signal, and is driven in a test by a fake platform', async () => {
     const reminded: string[] = []
 
-    const remind = step('send-reminder', {
+    const remind = defineStep('send-reminder', {
       run: async (input: { invoiceId: string }) => {
         reminded.push(input.invoiceId)
       },

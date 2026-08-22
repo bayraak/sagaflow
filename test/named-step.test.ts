@@ -3,12 +3,12 @@ import { describe, expect, it } from 'bun:test'
 import { defineWorkflow } from '../src/define.js'
 import {
   executeDurable,
-  namedStep,
   SagaError,
   type DurableWorkflowHandle,
   type StepBudget,
   type WorkflowHandle,
 } from '../src/index.js'
+import { namedStep } from '../src/step.js'
 import { createFakePrimitive } from './helpers/primitive'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'

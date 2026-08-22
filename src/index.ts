@@ -8,14 +8,25 @@ export { canonicalise, stableHash } from './canonical.js'
 export { executeDurable } from './durable.js'
 export { sagaflow, type Flow, type RunReport, type SagaflowConfig } from './flow.js'
 export {
+  all,
+  ctx,
+  emit,
+  runId,
+  sleep,
+  step,
+  waitForEvent,
+  type StepDeclaration,
+  type StepRunContext,
+  type StepUndo,
+} from './ambient.js'
+export {
   saga,
   type AnySaga,
+  type CallOptions,
   type DurableSaga,
   type DurableSagaHandle,
   type InlineSaga,
   type SagaHandle,
-  type StepDeclaration,
-  type StepRunContext,
 } from './saga.js'
 export { executeRun, type StepRunner } from './engine.js'
 export { IdempotencyKeyHeldError, messageOf, SagaflowError, SagaError } from './errors.js'
@@ -33,13 +44,7 @@ export {
   type RegisteredWorkflow,
 } from './registry.js'
 export { anything, SchemaError } from './schema.js'
-export {
-  compensationStepName,
-  defaultStepConfig,
-  namedStep,
-  reservedStepNames,
-  step,
-} from './step.js'
+export { compensationStepName, defaultStepConfig, reservedStepNames } from './step.js'
 export { abandonedSweepLimit, sweepAbandonedRuns } from './sweep.js'
 export { instanceIdFor, startDurableWorkflow } from './start.js'
 export type {

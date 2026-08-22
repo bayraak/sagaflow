@@ -2,7 +2,6 @@ import { describe, expect, it } from 'bun:test'
 
 import { defineWorkflow } from '../src/define.js'
 import {
-  step,
   defaultStepConfig,
   requestCancellation,
   SagaflowError,
@@ -12,6 +11,7 @@ import {
   type StepContext,
   type WorkflowHandle,
 } from '../src/index.js'
+import { defineStep } from '../src/step.js'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
 
@@ -22,7 +22,7 @@ describe('a step is a name and a bag of options', () => {
   it('takes its work, its undo and its budget as keys', async () => {
     const harness = createTestRuntime()
 
-    const reserve = step('reserve', {
+    const reserve = defineStep('reserve', {
       run: async (input: { mark: string }, ctx: StepContext<TestRuntime>) => {
         ctx.invocations.push('invoke:reserve')
 
@@ -51,19 +51,19 @@ describe('a step is a name and a bag of options', () => {
   })
 
   it('spends the default budget when it names none', () => {
-    const plain = step('plain', { run: async () => 1 })
+    const plain = defineStep('plain', { run: async () => 1 })
 
     expect(plain.config).toEqual(defaultStepConfig)
   })
 
   it('spends only what it named when it names one', () => {
-    const impatient = step('impatient', { run: async () => 1, timeout: '5 seconds' })
+    const impatient = defineStep('impatient', { run: async () => 1, timeout: '5 seconds' })
 
     expect(impatient.config).toEqual({ timeout: '5 seconds' })
   })
 
   it('refuses a reserved name', () => {
-    expect(() => step('finish-run', { run: async () => 1 })).toThrow('reserved')
+    expect(() => defineStep('finish-run', { run: async () => 1 })).toThrow('reserved')
   })
 })
 
@@ -108,7 +108,7 @@ describe('everything this library throws shares an ancestor', () => {
   it('covers a cancellation', async () => {
     const harness = createTestRuntime()
 
-    const cancelling = step('cancel-me', {
+    const cancelling = defineStep('cancel-me', {
       run: async (input: { mark: string }, ctx: StepContext<TestRuntime>) => {
         await requestCancellation({
           journal: ctx.journal,

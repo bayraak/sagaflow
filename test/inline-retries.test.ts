@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 
 import { defineWorkflow } from '../src/define.js'
-import { step, type WorkflowHandle } from '../src/index.js'
+import { type WorkflowHandle } from '../src/index.js'
+import { defineStep } from '../src/step.js'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput } from './helpers/steps'
 
@@ -13,7 +14,7 @@ describe('an inline step that asked to be retried', () => {
     const harness = createTestRuntime()
     const attempts: number[] = []
 
-    const flaky = step<TestRuntime, { mark: string }, string>('flaky', {
+    const flaky = defineStep<TestRuntime, { mark: string }, string>('flaky', {
       run: async (_input, ctx) => {
         attempts.push(ctx.attempt)
         if (ctx.attempt < 3) throw new Error('not yet')
@@ -43,7 +44,7 @@ describe('an inline step that asked to be retried', () => {
     const harness = createTestRuntime()
     let seen = 0
 
-    const hopeless = step<TestRuntime, { mark: string }, string>('hopeless', {
+    const hopeless = defineStep<TestRuntime, { mark: string }, string>('hopeless', {
       run: async () => {
         seen += 1
 

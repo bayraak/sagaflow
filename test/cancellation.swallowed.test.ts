@@ -2,16 +2,16 @@ import { describe, expect, it } from 'bun:test'
 
 import { defineWorkflow } from '../src/define.js'
 import {
-  step,
   requestCancellation,
   SagaCancelledError,
   SagaError,
   type WorkflowHandle,
 } from '../src/index.js'
+import { defineStep } from '../src/step.js'
 import { createTestRuntime, firstRun, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
 
-const cancelling = step<TestRuntime, { mark: string }, { seen: string }>('first', {
+const cancelling = defineStep<TestRuntime, { mark: string }, { seen: string }>('first', {
   run: async (input, ctx) => {
     ctx.invocations.push('invoke:first')
     await requestCancellation({ journal: ctx.journal, tenantId: ctx.tenantId, runId: ctx.runId })

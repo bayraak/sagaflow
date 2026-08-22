@@ -1,9 +1,10 @@
 import { defineWorkflow } from '../../src/define.js'
-import { step, type WorkflowHandle } from '../../src/index'
+import { type WorkflowHandle } from '../../src/index'
+import { defineStep } from '../../src/step.js'
 import type { TestRuntime } from './runtime'
 import { markInput, markStep, type MarkInput, type MarkOutput } from './steps'
 
-export const emittingStep = step<TestRuntime, MarkInput, MarkOutput>('emitting', {
+export const emittingStep = defineStep<TestRuntime, MarkInput, MarkOutput>('emitting', {
   run: async (input, ctx) => {
     ctx.emit('invoice.issued', { invoiceId: input.mark, total: 1 })
 

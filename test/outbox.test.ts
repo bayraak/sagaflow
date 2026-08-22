@@ -2,18 +2,18 @@ import { describe, expect, it } from 'bun:test'
 
 import { defineWorkflow } from '../src/define.js'
 import {
-  step,
   executeDurable,
   SagaError,
   type DurableWorkflowHandle,
   type WorkflowHandle,
 } from '../src/index.js'
+import { defineStep } from '../src/step.js'
 import { passThroughPrimitive } from './helpers/primitive'
 import { createTestRuntime, firstFinish, type TestRuntime } from './helpers/runtime'
 import { markInput } from './helpers/steps'
 
 const writeStep = (options: { fails?: boolean } = {}) =>
-  step<TestRuntime, { mark: string }, { seen: string }>('write', {
+  defineStep<TestRuntime, { mark: string }, { seen: string }>('write', {
     run: async (input, ctx) => {
       ctx.emit('invoice.issued', { invoiceId: input.mark, total: 1 })
       if (options.fails) throw new Error('write refused')

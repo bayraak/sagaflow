@@ -1,13 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 
 import { defineWorkflow } from '../src/define.js'
-import {
-  step,
-  executeDurable,
-  namedStep,
-  type DurableWorkflowHandle,
-  type WorkflowHandle,
-} from '../src/index.js'
+import { executeDurable, type DurableWorkflowHandle, type WorkflowHandle } from '../src/index.js'
+import { defineStep, namedStep } from '../src/step.js'
 import { createRetryingPrimitive, passThroughPrimitive } from './helpers/primitive'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput } from './helpers/steps'
@@ -16,7 +11,7 @@ import { markInput } from './helpers/steps'
 // accepted the charge, the acknowledgement was lost, the step is retried — and without a key
 // that is stable across attempts, the customer is charged twice.
 const keyReportingStep = (name: string, options: { failsUntilAttempt?: number } = {}) =>
-  step<TestRuntime, { mark: string }, { key: string }>(name, {
+  defineStep<TestRuntime, { mark: string }, { key: string }>(name, {
     run: async (_input, ctx) => {
       ctx.invocations.push(`invoke:${name}:${ctx.idempotencyKey}`)
       if (options.failsUntilAttempt !== undefined) {

@@ -2,19 +2,19 @@ import { describe, expect, it } from 'bun:test'
 
 import { defineWorkflow } from '../src/define.js'
 import {
-  step,
   requestCancellation,
   SagaCancelledError,
   SagaError,
   type WorkflowHandle,
 } from '../src/index.js'
+import { defineStep } from '../src/step.js'
 import { createTestRuntime, firstRun, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
 
 // Somebody asking for the run to stop, from outside it. Doing it from inside a step is how a
 // suite makes "the request arrived between two steps" happen at a known moment.
 const cancellingStep = (name: string, options: { compensateFails?: boolean } = {}) =>
-  step<TestRuntime, { mark: string }, { seen: string }>(name, {
+  defineStep<TestRuntime, { mark: string }, { seen: string }>(name, {
     run: async (input, ctx) => {
       ctx.invocations.push(`invoke:${name}`)
       await requestCancellation({ journal: ctx.journal, tenantId: ctx.tenantId, runId: ctx.runId })

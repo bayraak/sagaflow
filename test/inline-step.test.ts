@@ -2,13 +2,13 @@ import { describe, expect, it } from 'bun:test'
 
 import { defineWorkflow } from '../src/define.js'
 import {
-  step,
   executeDurable,
   SagaError,
   type DurableWorkflowHandle,
   type StepContext,
   type WorkflowHandle,
 } from '../src/index.js'
+import { defineStep } from '../src/step.js'
 import { createFakePrimitive } from './helpers/primitive'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
@@ -165,7 +165,7 @@ describe('what a compensation is handed', () => {
     const harness = createTestRuntime()
     const undone: unknown[] = []
 
-    const reserve = step('reserve', {
+    const reserve = defineStep('reserve', {
       run: async (input: { mark: string }) => ({ number: 41, mark: input.mark }),
       undo: async (reserved: { number: number; mark: string }) => {
         undone.push(reserved)

@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'bun:test'
 
 import { defineWorkflow } from '../src/define.js'
-import { step, executeDurable, type WorkflowHandle } from '../src/index.js'
+import { executeDurable, type WorkflowHandle } from '../src/index.js'
+import { defineStep } from '../src/step.js'
 import { createCachingPrimitive } from './helpers/primitive'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput } from './helpers/steps'
 
-const issuingStep = step<TestRuntime, { mark: string }, { seen: string }>('issue', {
+const issuingStep = defineStep<TestRuntime, { mark: string }, { seen: string }>('issue', {
   run: async (input, ctx) => {
     ctx.invocations.push('invoke:issue')
     ctx.emit('invoice.issued', { invoiceId: input.mark, total: 10 })

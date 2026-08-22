@@ -1,5 +1,7 @@
+import { runInScope } from './ambient.js'
 import { requestCancellation } from './cancel.js'
 import type { DurableWorkflow } from './define.js'
+import { configureDefault, provideDefaultFactory } from './instance.js'
 import { createInProcessSink, createMemoryJournal } from './memory/index.js'
 import { definitionOf, type AnySaga } from './saga.js'
 import { startDurableWorkflow } from './start.js'
@@ -60,10 +62,18 @@ export type Flow<Events extends EventSchemaMap = EventSchemaMap> = {
    * will not need it.
    */
   announce(): void
+  /**
+   * Run something with this instance in scope, so a saga called inside it needs no argument.
+   * The explicit form still wins where it is given.
+   */
+  scope<Result>(
+    extras: { tenantId?: string; actor?: string | null } & Record<string, unknown>,
+    body: () => Promise<Result>,
+  ): Promise<Result>
   startDurable(
     definition: DurableWorkflow<WorkflowRuntime, StandardSchemaV1, unknown>,
     input: unknown,
-    options?: { replayOf?: string },
+    options?: { replayOf?: string; parentRunId?: string | null; idempotencyKey?: string },
   ): Promise<{ runId: string; deduplicated: boolean }>
 }
 
@@ -83,7 +93,12 @@ const notDurable =
  * says once and loudly that nothing is durable. The first five minutes need no infrastructure,
  * and nobody can mistake it for something to deploy.
  */
-export const sagaflow = <Events extends EventSchemaMap = EventSchemaMap>(
+export const sagaflow: {
+  <Events extends EventSchemaMap = EventSchemaMap>(config?: SagaflowConfig<Events>): Flow<Events>
+  configure<Events extends EventSchemaMap = EventSchemaMap>(
+    config: SagaflowConfig<Events>,
+  ): Flow<Events>
+} = <Events extends EventSchemaMap = EventSchemaMap>(
   config: SagaflowConfig<Events> = {},
 ): Flow<Events> => {
   const ephemeral = config.journal === undefined
@@ -141,6 +156,7 @@ export const sagaflow = <Events extends EventSchemaMap = EventSchemaMap>(
       config,
       announce,
       for: (next) => build(next),
+      scope: (scoped, body) => runInScope(build(scoped), body),
       run: async (name, input) => {
         announce()
         const declared = byName.get(name)
@@ -189,7 +205,11 @@ export const sagaflow = <Events extends EventSchemaMap = EventSchemaMap>(
           definition,
           input,
           ctx: runtime,
+          parentRunId: options?.parentRunId ?? null,
           ...(options?.replayOf === undefined ? {} : { replayOf: options.replayOf }),
+          ...(options?.idempotencyKey === undefined
+            ? {}
+            : { idempotencyKey: options.idempotencyKey }),
         })
       },
     }
@@ -212,4 +232,22 @@ const runOf = async (
   }
 
   return journal.getRun({ tenantId, runId })
+}
+
+// The default instance is an in-memory one, made on first use. It lives here because this module
+// is what an instance is; `instance.ts` only holds the reference so the verbs can reach it
+// without importing this file back.
+provideDefaultFactory(() => sagaflow())
+
+/**
+ * Replace the instance a call falls back to when it is given none and is inside no scope.
+ * Configure it once, at the top of your process, and every saga you already wrote keeps working.
+ */
+sagaflow.configure = <Events extends EventSchemaMap = EventSchemaMap>(
+  config: SagaflowConfig<Events>,
+): Flow<Events> => {
+  const instance = sagaflow(config)
+  configureDefault(instance as unknown as Flow)
+
+  return instance
 }

@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 
 import { defineWorkflow } from '../src/define.js'
-import {
-  step,
-  executeDurable,
-  type DurableWorkflowHandle,
-  type WorkflowHandle,
-} from '../src/index.js'
+import { executeDurable, type DurableWorkflowHandle, type WorkflowHandle } from '../src/index.js'
+import { defineStep } from '../src/step.js'
 import { createCachingPrimitive, passThroughPrimitive } from './helpers/primitive'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
@@ -25,7 +21,7 @@ const createGate = () => {
 const gatedSteps = () => {
   const gate = createGate()
 
-  const slow = step<TestRuntime, { mark: string }, { seen: string }>('slow', {
+  const slow = defineStep<TestRuntime, { mark: string }, { seen: string }>('slow', {
     run: async (input, ctx) => {
       ctx.invocations.push('invoke:slow')
       await gate.passed
@@ -37,7 +33,7 @@ const gatedSteps = () => {
     },
   })
 
-  const quick = step<TestRuntime, { mark: string }, { seen: string }>('quick', {
+  const quick = defineStep<TestRuntime, { mark: string }, { seen: string }>('quick', {
     run: async (input, ctx) => {
       ctx.invocations.push('invoke:quick')
       gate.open()

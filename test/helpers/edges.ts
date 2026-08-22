@@ -1,5 +1,6 @@
 import { defineWorkflow } from '../../src/define.js'
-import { step, type WorkflowHandle } from '../../src/index'
+import { type WorkflowHandle } from '../../src/index'
+import { defineStep } from '../../src/step.js'
 import type { TestRuntime } from './runtime'
 import { markInput, type MarkInput, type MarkOutput } from './steps'
 
@@ -7,7 +8,7 @@ const edgeStep = (
   name: string,
   options: { compensateFails?: boolean; emitsWhileUndoing?: boolean; fails?: boolean } = {},
 ) =>
-  step<TestRuntime, MarkInput, MarkOutput>(name, {
+  defineStep<TestRuntime, MarkInput, MarkOutput>(name, {
     run: async (input, ctx) => {
       ctx.invocations.push(`invoke:${name}`)
       if (options.fails) throw new Error(`${name} refused`)

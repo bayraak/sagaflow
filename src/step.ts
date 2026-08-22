@@ -49,7 +49,7 @@ export const budgetOf = (options: StepBudget): StepRetryConfig => {
  * next thing anybody wants from a step has to have somewhere to go: a new key here is an
  * additive change, a fifth positional argument would not have been.
  */
-export const step = <Ctx, Input, Output>(
+export const defineStep = <Ctx, Input, Output>(
   name: string,
   options: StepOptions<Ctx, Input, Output>,
 ): Step<Ctx, Input, Output> => {

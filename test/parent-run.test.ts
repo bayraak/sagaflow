@@ -2,11 +2,11 @@ import { describe, expect, it } from 'bun:test'
 
 import { defineWorkflow } from '../src/define.js'
 import {
-  step,
   startDurableWorkflow,
   type DurableWorkflowHandle,
   type WorkflowHandle,
 } from '../src/index.js'
+import { defineStep } from '../src/step.js'
 import { createLauncher } from './helpers/launcher'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
@@ -27,7 +27,7 @@ describe('a run started from inside another run', () => {
   it('records the run it was started from', async () => {
     const harness = createTestRuntime()
 
-    const startsAChild = step<TestRuntime, { mark: string }, { childRunId: string }>(
+    const startsAChild = defineStep<TestRuntime, { mark: string }, { childRunId: string }>(
       'start-child',
       {
         run: async (input, ctx) => {

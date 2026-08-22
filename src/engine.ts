@@ -1,5 +1,5 @@
 import { SagaCancelledError } from './cancel.js'
-import { messageOf, SagaError } from './errors.js'
+import { messageOf, SagaError, SagaflowError } from './errors.js'
 import { createEnvelope, lifecycleEvents, validateEmission, type RawEvent } from './events.js'
 import { compensationIdempotencyKey, stepIdempotencyKey } from './identity.js'
 import { dispatchEvents } from './outbox.js'
@@ -90,7 +90,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   const { name, runId, ctx, runner, invoke } = options
   const held: EventEnvelope[] = []
   const undos: Undo<Ctx>[] = []
-  const inflight: Promise<unknown>[] = []
+  const inflight: { name: string; settled: boolean; promise: Promise<unknown> }[] = []
   const usedNames = new Set<string>()
   let seq = 0
   let ordinal = 0
@@ -326,7 +326,25 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
             third as InlineStepOptions<Ctx, unknown> | undefined,
           )
         : stepCall(first as Step<Ctx, unknown, unknown>, second)
-    inflight.push(running.catch(() => undefined))
+
+    const tracked = {
+      name: typeof first === 'string' ? first : (first as Step<Ctx, unknown, unknown>).name,
+      settled: false,
+      promise: running.then(
+        (value) => {
+          tracked.settled = true
+
+          return value
+        },
+        (error: unknown) => {
+          tracked.settled = true
+
+          throw error
+        },
+      ),
+    }
+    tracked.promise.catch(() => undefined)
+    inflight.push(tracked)
 
     return running
   }
@@ -355,7 +373,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   const compensate = async (cause: unknown): Promise<'compensated' | 'failed'> => {
     // Nothing is undone until everything has stopped, so that every undo there is going to be
     // is registered before the first one runs.
-    await Promise.allSettled(inflight)
+    await Promise.allSettled(inflight.map((tracked) => tracked.promise))
 
     let outcome: 'compensated' | 'failed' = 'compensated'
 
@@ -436,6 +454,16 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     // Stopping is not the body's decision. A body that caught the cancellation and carried on
     // does not get to hand back a completed run.
     if (cancelledAfter !== null) throw new SagaCancelledError(runId)
+
+    /*
+     * A step the body started and never awaited would otherwise let the run be written down as
+     * completed while that step was still going — and its undo would be registered with nobody
+     * left to run it. Every verb returns a promise and every example awaits one, so this is a
+     * missing `await` rather than a style choice, and it is worth failing loudly over.
+     * `@typescript-eslint/no-floating-promises` catches it before it ever runs.
+     */
+    const abandoned = inflight.find((tracked) => !tracked.settled)
+    if (abandoned) throw new SagaflowError(`step '${abandoned.name}' was not awaited`)
 
     /*
      * A body that returns the wrong thing is a body that failed, however cheerfully it

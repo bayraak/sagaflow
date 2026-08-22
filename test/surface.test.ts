@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { sagaflow, saga, step } from 'sagaflow'
+import { saga, sagaflow, step } from 'sagaflow'
 import { createMemoryJournal, createMemorySink } from 'sagaflow/memory'
 import { z } from 'zod'
 
@@ -104,10 +104,10 @@ describe('configuring it once', () => {
     const seen: unknown[] = []
 
     const write = saga('thing.write', async (_input: { mark: string }, s) => {
-      seen.push(s.ctx)
+      seen.push(s.ctx())
 
-      return s.step('write', async (ctx) => {
-        seen.push(ctx.ctx)
+      return s.step('write', async (stepContext) => {
+        seen.push(stepContext.ctx)
 
         return 1
       })
@@ -115,7 +115,10 @@ describe('configuring it once', () => {
 
     await write({ mark: 'x' }, flow.for({ tenantId: 'acme', db: 'a-database-handle' }))
 
-    expect(seen).toEqual([{ db: 'a-database-handle' }, { db: 'a-database-handle' }])
+    expect(seen).toEqual([
+      { tenantId: 'acme', actor: null, db: 'a-database-handle' },
+      { db: 'a-database-handle' },
+    ])
   })
 
   it('says once that nothing is durable when nothing was configured', async () => {
@@ -170,17 +173,20 @@ describe('a reusable step', () => {
     const flow = sagaflow({ journal: journal.journal })
     const undone: unknown[] = []
 
-    const reserve = step('reserve', {
-      run: async (input: { seat: string }) => ({ id: `seat_${input.seat}` }),
-      undo: async (reserved) => {
-        undone.push(reserved)
-      },
-      retries: { limit: 1, delay: 0 },
-    })
+    // A reusable step is a plain function that calls the verb. There is no separate
+    // constructor to learn.
+    const reserve = (seat: string) =>
+      step(
+        'reserve',
+        async () => ({ id: `seat_${seat}` }),
+        async (reserved) => {
+          undone.push(reserved)
+        },
+      )
 
-    const book = saga('booking.reuse', async (input: { seat: string }, s) => {
-      await s.step(reserve, input)
-      await s.step('boom', async () => {
+    const book = saga('booking.reuse', async (input: { seat: string }) => {
+      await reserve(input.seat)
+      await step('boom', async () => {
         throw new Error('no')
       })
     })

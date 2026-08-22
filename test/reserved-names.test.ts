@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'bun:test'
 
-import { step, namedStep, reservedStepNames } from '../src/index.js'
+import { reservedStepNames } from '../src/index.js'
+import { defineStep, namedStep } from '../src/step.js'
 
-const anyStep = (name: string) => step<unknown, void, void>(name, { run: async () => undefined })
+const anyStep = (name: string) =>
+  defineStep<unknown, void, void>(name, { run: async () => undefined })
 
 // The engine runs steps of its own — the finish and the drain — and names every compensation
 // after the step it reverses. A caller's step under one of those names would be handed the
