@@ -464,6 +464,21 @@ Keys are per tenant. An input can be the same string for every tenant ("the spen
 March" is), and a key that left the tenant out would let the first tenant to ask claim the work
 for everybody.
 
+## Replaying a run
+
+```ts
+await flow.replay(runId)
+```
+
+A replay is a **new run that says which run it is redoing**, keyed on that rather than on the
+input. Most definitions derive their key from the input, so a replay that kept the definition's
+own key would arrive at the very key the original run claimed and be told "already done" — the one
+answer a replay must never give, because being already done is why somebody is asking. Asking for
+the same replay twice is still one replay.
+
+It needs the saga in `sagaflow({ sagas })` and a journal that can read a run back. The original
+run is left exactly as it was.
+
 ## Cancellation
 
 ```ts

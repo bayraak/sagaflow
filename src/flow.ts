@@ -206,7 +206,14 @@ export const sagaflow: {
 
         const declared = byName.get(run.name)
         const definition = declared === undefined ? undefined : definitionOf(declared)
-        if (!definition) throw new Error(`no durable saga is registered as "${run.name}"`)
+        if (!definition) throw new Error(`no saga is registered as "${run.name}" to replay`)
+
+        // An inline run has no instance to start. Replaying one would create a durable instance
+        // for a definition that was never durable, which is a stranger failure than being told
+        // no — run the inline saga again yourself, which is all a replay of one could mean.
+        if (declared?.durable !== true) {
+          throw new Error(`"${run.name}" is not durable, so there is no instance to replay`)
+        }
 
         return flow.startDurable(definition, run.input, { replayOf: runId })
       },

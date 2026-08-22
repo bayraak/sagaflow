@@ -110,8 +110,12 @@ export const createMemoryJournal = (options: { now?: () => number } = {}): Memor
         status: 'running',
         cancelRequested: false,
         startedAt: now(),
+        finishedAt: null,
         ...params,
+        // A column nobody set is null in a table, never undefined. An adapter that answered
+        // otherwise would let a test pass here and fail against a real database.
         parentRunId: params.parentRunId ?? null,
+        replayOf: params.replayOf ?? null,
       })
 
       return id
