@@ -1,22 +1,22 @@
 import { createStep, defineWorkflow, type WorkflowHandle } from '../../src/index'
 import type { TestRuntime } from './runtime'
-import { markInput, type MarkInput, type MarkOutput, type MarkUndo } from './steps'
+import { markInput, type MarkInput, type MarkOutput } from './steps'
 
 const edgeStep = (
   name: string,
   options: { compensateFails?: boolean; emitsWhileUndoing?: boolean; fails?: boolean } = {},
 ) =>
-  createStep<TestRuntime, MarkInput, MarkOutput, MarkUndo>(name, {
+  createStep<TestRuntime, MarkInput, MarkOutput>(name, {
     run: async (input, ctx) => {
       ctx.invocations.push(`invoke:${name}`)
       if (options.fails) throw new Error(`${name} refused`)
 
-      return { output: { seen: `${name}:${input.mark}` }, compensateWith: { undo: name } }
+      return { seen: `${name}:${input.mark}` }
     },
-    compensate: async (undo, ctx) => {
-      ctx.invocations.push(`compensate:${undo.undo}`)
+    compensate: async (_seen, ctx) => {
+      ctx.invocations.push(`compensate:${name}`)
       if (options.emitsWhileUndoing) {
-        ctx.emit('invoice.issued', { invoiceId: `undone-${undo.undo}`, total: 0 })
+        ctx.emit('invoice.issued', { invoiceId: `undone-${name}`, total: 0 })
       }
       if (options.compensateFails) throw new Error(`${name} could not be undone`)
     },

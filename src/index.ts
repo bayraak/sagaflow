@@ -30,8 +30,6 @@ export {
   defaultStepConfig,
   namedStep,
   reservedStepNames,
-  type StepBudget,
-  type StepOptions,
 } from './step.js'
 export { abandonedSweepLimit, sweepAbandonedRuns } from './sweep.js'
 export { instanceIdFor, startDurableWorkflow } from './start.js'
@@ -47,6 +45,7 @@ export type {
   EventSink,
   EventsOf,
   InlineRunResult,
+  InlineStepOptions,
   LifecycleEventPayloads,
   LifecycleEventType,
   RunJournal,
@@ -56,8 +55,10 @@ export type {
   StandardSchemaV1,
   Step,
   StepBackoff,
+  StepBudget,
   StepCall,
   StepContext,
+  StepOptions,
   StepPrimitive,
   StepRetryConfig,
   StepStatus,

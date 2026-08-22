@@ -1,10 +1,4 @@
-import type {
-  CompensationReason,
-  Step,
-  StepBackoff,
-  StepContext,
-  StepRetryConfig,
-} from './types.js'
+import type { Step, StepBudget, StepOptions, StepRetryConfig } from './types.js'
 
 /**
  * What a step is worth retrying for, when nothing says otherwise. Cloudflare's own default is
@@ -31,7 +25,7 @@ export const compensationPrefix = 'compensate:'
 /** What the engine calls the step that undoes another one. Declared here, used everywhere. */
 export const compensationStepName = (stepName: string): string => `${compensationPrefix}${stepName}`
 
-const assertNameIsAvailable = (name: string): void => {
+export const assertNameIsAvailable = (name: string): void => {
   if ((Object.values(reservedStepNames) as string[]).includes(name)) {
     throw new Error(`"${name}" is a reserved step name`)
   }
@@ -41,38 +35,7 @@ const assertNameIsAvailable = (name: string): void => {
   }
 }
 
-/** What a step is allowed to spend before it gives up. */
-export type StepBudget = {
-  retries?: { limit: number; delay: number | string; backoff?: StepBackoff }
-  timeout?: number | string
-}
-
-/**
- * Everything a step is, apart from its name.
- *
- * An options bag rather than a list of positional arguments, because the next thing anybody
- * wants from a step has to have somewhere to go. A new key here is an additive change; a fifth
- * positional argument would not have been.
- */
-export type StepOptions<Ctx, Input, Output, Compensation> = StepBudget & {
-  /** The work. Answers with what it produced, and what would undo it. */
-  run(
-    input: Input,
-    ctx: StepContext<Ctx>,
-  ): Promise<{ output: Output; compensateWith?: Compensation }>
-  /**
-   * How to undo it, given exactly what `run` said would undo it — and why it is being undone,
-   * because a refund note that says "the customer changed their mind" reads differently from
-   * one that says "the warehouse fell over".
-   */
-  compensate?(
-    compensateWith: Compensation,
-    ctx: StepContext<Ctx>,
-    reason: CompensationReason,
-  ): Promise<void>
-}
-
-const budgetOf = (options: StepBudget): StepRetryConfig => {
+export const budgetOf = (options: StepBudget): StepRetryConfig => {
   if (options.retries === undefined && options.timeout === undefined) return defaultStepConfig
 
   return {
@@ -81,10 +44,15 @@ const budgetOf = (options: StepBudget): StepRetryConfig => {
   }
 }
 
-export const createStep = <Ctx, Input, Output, Compensation = never>(
+/**
+ * A step declared once and reused. An options bag rather than positional arguments, because the
+ * next thing anybody wants from a step has to have somewhere to go: a new key here is an
+ * additive change, a fifth positional argument would not have been.
+ */
+export const createStep = <Ctx, Input, Output>(
   name: string,
-  options: StepOptions<Ctx, Input, Output, Compensation>,
-): Step<Ctx, Input, Output, Compensation> => {
+  options: StepOptions<Ctx, Input, Output>,
+): Step<Ctx, Input, Output> => {
   assertNameIsAvailable(name)
 
   return {
@@ -109,11 +77,11 @@ export const createStep = <Ctx, Input, Output, Compensation = never>(
  * definition inside a fan-out, where the common failure is permanent, should say what it
  * already knows rather than spend a minute per item finding out again.
  */
-export const namedStep = <Ctx, Input, Output, Compensation>(
-  step: Step<Ctx, Input, Output, Compensation>,
+export const namedStep = <Ctx, Input, Output>(
+  step: Step<Ctx, Input, Output>,
   name: string,
   budget?: StepBudget,
-): Step<Ctx, Input, Output, Compensation> => {
+): Step<Ctx, Input, Output> => {
   assertNameIsAvailable(name)
 
   return { ...step, name, ...(budget === undefined ? {} : { config: budgetOf(budget) }) }

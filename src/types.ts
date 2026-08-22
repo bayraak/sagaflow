@@ -73,6 +73,12 @@ export type StepRetryConfig = {
   timeout?: number | string
 }
 
+/** What a step is allowed to spend before it gives up. */
+export type StepBudget = {
+  retries?: { limit: number; delay: number | string; backoff?: StepBackoff }
+  timeout?: number | string
+}
+
 /**
  * The wire shape every event travels in: who it happened to, which run produced it, and when.
  * The payload stays `unknown` here on purpose — the schema for the named type is what decides
@@ -304,18 +310,40 @@ export type CompensationReason = {
  * heterogeneous list of steps or definitions be held in one array without every caller reaching
  * for a cast.
  */
-export type Step<Ctx, Input, Output, Compensation> = {
+/**
+ * A step, as the engine holds it.
+ *
+ * There is ONE rule about compensation data: the undo is handed exactly what the step returned.
+ * A step that needs something extra to undo itself returns it, and then its value says
+ * everything about what it did — which is also what the run record holds and what the body was
+ * given. One value, three readers.
+ *
+ * `run` and `compensate` are declared as methods rather than function properties so TypeScript
+ * checks their parameters bivariantly, which is what lets a heterogeneous list of steps or
+ * definitions be held in one array without every caller reaching for a cast.
+ */
+export type Step<Ctx, Input, Output> = {
   name: string
   config: StepRetryConfig
-  run(
-    input: Input,
-    ctx: StepContext<Ctx>,
-  ): Promise<{ output: Output; compensateWith?: Compensation }>
-  compensate?(
-    compensateWith: Compensation,
-    ctx: StepContext<Ctx>,
-    reason: CompensationReason,
-  ): Promise<void>
+  run(input: Input, ctx: StepContext<Ctx>): Promise<Output>
+  compensate?(output: Output, ctx: StepContext<Ctx>, reason: CompensationReason): Promise<void>
+}
+
+/** Everything a step declared inline may say about itself beyond its name and its work. */
+export type InlineStepOptions<Ctx, Output> = StepBudget & {
+  compensate?(output: Output, ctx: StepContext<Ctx>, reason: CompensationReason): Promise<void>
+}
+
+/** Everything a reusable step is, apart from its name. */
+export type StepOptions<Ctx, Input, Output> = StepBudget & {
+  /** The work. Answers with what it did. */
+  run(input: Input, ctx: StepContext<Ctx>): Promise<Output>
+  /**
+   * How to undo it, given exactly what `run` returned — and why it is being undone, because a
+   * refund note that says "the customer changed their mind" reads differently from one that
+   * says "the warehouse fell over".
+   */
+  compensate?(output: Output, ctx: StepContext<Ctx>, reason: CompensationReason): Promise<void>
 }
 
 /**
@@ -326,9 +354,17 @@ export type Step<Ctx, Input, Output, Compensation> = {
 export type StepCall<Output> = PromiseLike<Output>
 
 export type WorkflowHandle<Ctx> = {
-  step<Input, Output, Compensation>(
-    step: Step<Ctx, Input, Output, Compensation>,
-    input: Input,
+  /** A step declared elsewhere and reused, handed its input. */
+  step<Input, Output>(step: Step<Ctx, Input, Output>, input: Input): StepCall<Output>
+  /**
+   * A step declared where it is used. Most steps are used once, in one body, and lifting them
+   * out buys nothing but distance between the work and the reason for it. Same engine path:
+   * same sequence, same record, same memoisation, same guards.
+   */
+  step<Output>(
+    name: string,
+    run: (ctx: StepContext<Ctx>) => Promise<Output>,
+    options?: InlineStepOptions<Ctx, Output>,
   ): StepCall<Output>
   emit: EmitFn<EventsOf<Ctx>>
 }

@@ -52,10 +52,16 @@ import { createSqliteJournal } from 'sagaflow/sqlite'
 
 ## Adding a workflow, end to end
 
-1. **Write the steps.** `createStep(name, { run, compensate?, retries?, timeout? })`. `run`
-   returns `{ output, compensateWith? }`. The undo is registered **from the returned value**,
+1. **Write the steps.** Either inline, where they are used —
+   `wf.step(name, async (ctx) => value, { compensate?, retries?, timeout? })` — or reusable:
+   `createStep(name, { run, compensate?, retries?, timeout? })`. Both go down the same engine
+   path.
+
+   **One rule about compensation data: the undo is handed exactly what `run` returned.** A step
+   that needs something extra to undo itself returns it. Registered from the returned value and
    never from a closure — a durable replay does not run the body again, and anything living in
    that closure is gone.
+
 2. **Compose the definition.** `defineWorkflow({ name, input, execution, output?, idempotency? }, body)`.
    `input` and `output` are any Standard Schema (Zod, Valibot, ArkType). `idempotency` derives a
    key from the parsed input.

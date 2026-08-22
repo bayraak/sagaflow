@@ -14,15 +14,15 @@ import { markInput, markStep } from './helpers/steps'
 // Somebody asking for the run to stop, from outside it. Doing it from inside a step is how a
 // suite makes "the request arrived between two steps" happen at a known moment.
 const cancellingStep = (name: string, options: { compensateFails?: boolean } = {}) =>
-  createStep<TestRuntime, { mark: string }, { seen: string }, { undo: string }>(name, {
+  createStep<TestRuntime, { mark: string }, { seen: string }>(name, {
     run: async (input, ctx) => {
       ctx.invocations.push(`invoke:${name}`)
       await requestCancellation({ journal: ctx.journal, tenantId: ctx.tenantId, runId: ctx.runId })
 
-      return { output: { seen: input.mark }, compensateWith: { undo: name } }
+      return { seen: input.mark }
     },
-    compensate: async (undo, ctx) => {
-      ctx.invocations.push(`compensate:${undo.undo}`)
+    compensate: async (_seen, ctx) => {
+      ctx.invocations.push(`compensate:${name}`)
       if (options.compensateFails) throw new Error(`${name} could not be undone`)
     },
   })

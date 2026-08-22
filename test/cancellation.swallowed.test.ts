@@ -11,24 +11,17 @@ import {
 import { createTestRuntime, firstRun, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
 
-const cancelling = createStep<TestRuntime, { mark: string }, { seen: string }, { undo: string }>(
-  'first',
-  {
-    run: async (input, ctx) => {
-      ctx.invocations.push('invoke:first')
-      await requestCancellation({
-        journal: ctx.journal,
-        tenantId: ctx.tenantId,
-        runId: ctx.runId,
-      })
+const cancelling = createStep<TestRuntime, { mark: string }, { seen: string }>('first', {
+  run: async (input, ctx) => {
+    ctx.invocations.push('invoke:first')
+    await requestCancellation({ journal: ctx.journal, tenantId: ctx.tenantId, runId: ctx.runId })
 
-      return { output: { seen: input.mark }, compensateWith: { undo: 'first' } }
-    },
-    compensate: async (undo, ctx) => {
-      ctx.invocations.push(`compensate:${undo.undo}`)
-    },
+    return { seen: input.mark }
   },
-)
+  compensate: async (_seen, ctx) => {
+    ctx.invocations.push('compensate:first')
+  },
+})
 
 // A body is somebody else's code, and somebody else's code has try/catch in it. A body that
 // swallows the cancellation — deliberately or by wrapping a step in a catch-all — must not be

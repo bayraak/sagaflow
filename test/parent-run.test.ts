@@ -33,7 +33,7 @@ describe('a run started from inside another run', () => {
         run: async (input, ctx) => {
           const started = await child.run({ input, ctx, parentRunId: ctx.runId })
 
-          return { output: { childRunId: started.runId } }
+          return { childRunId: started.runId }
         },
       },
     )

@@ -26,10 +26,10 @@ describe('a step is a name and a bag of options', () => {
       run: async (input: { mark: string }, ctx: StepContext<TestRuntime>) => {
         ctx.invocations.push('invoke:reserve')
 
-        return { output: { seen: input.mark }, compensateWith: { undo: 'reserve' } }
+        return { seen: input.mark }
       },
-      compensate: async (undo: { undo: string }, ctx: StepContext<TestRuntime>) => {
-        ctx.invocations.push(`compensate:${undo.undo}`)
+      compensate: async (_seen: { seen: string }, ctx: StepContext<TestRuntime>) => {
+        ctx.invocations.push('compensate:reserve')
       },
       retries: { limit: 1, delay: '1 second' },
       timeout: '30 seconds',
@@ -51,22 +51,19 @@ describe('a step is a name and a bag of options', () => {
   })
 
   it('spends the default budget when it names none', () => {
-    const step = createStep('plain', { run: async () => ({ output: 1 }) })
+    const step = createStep('plain', { run: async () => 1 })
 
     expect(step.config).toEqual(defaultStepConfig)
   })
 
   it('spends only what it named when it names one', () => {
-    const step = createStep('impatient', {
-      run: async () => ({ output: 1 }),
-      timeout: '5 seconds',
-    })
+    const step = createStep('impatient', { run: async () => 1, timeout: '5 seconds' })
 
     expect(step.config).toEqual({ timeout: '5 seconds' })
   })
 
   it('refuses a reserved name', () => {
-    expect(() => createStep('finish-run', { run: async () => ({ output: 1 }) })).toThrow('reserved')
+    expect(() => createStep('finish-run', { run: async () => 1 })).toThrow('reserved')
   })
 })
 
@@ -119,7 +116,7 @@ describe('everything this library throws shares an ancestor', () => {
           runId: ctx.runId,
         })
 
-        return { output: { seen: input.mark } }
+        return { seen: input.mark }
       },
     })
 

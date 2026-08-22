@@ -4,10 +4,17 @@ import { createEnvelope, lifecycleEvents, validateEmission, type RawEvent } from
 import { compensationIdempotencyKey, stepIdempotencyKey } from './identity.js'
 import { dispatchEvents } from './outbox.js'
 import { validate } from './schema.js'
-import { compensationStepName, defaultStepConfig, reservedStepNames } from './step.js'
+import {
+  assertNameIsAvailable,
+  budgetOf,
+  compensationStepName,
+  defaultStepConfig,
+  reservedStepNames,
+} from './step.js'
 import type {
   CompensationOutcome,
   CompensationReason,
+  InlineStepOptions,
   Step,
   EmitFn,
   EventEnvelope,
@@ -121,8 +128,8 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     attempt,
   })
 
-  const runStep = async <StepInput, StepOutput, Compensation>(
-    step: Step<Ctx, StepInput, StepOutput, Compensation>,
+  const runStep = async <StepInput, StepOutput>(
+    step: Step<Ctx, StepInput, StepOutput>,
     input: StepInput,
   ): Promise<StepOutput> => {
     // Once the run has been told to stop, nothing else starts. A body is somebody else's code
@@ -179,7 +186,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
           name: step.name,
           status: 'completed',
           attempt,
-          output: produced.output,
+          output: produced,
         })
         cancellationRequested = recorded.cancellationRequested
         watch(ctx.observer?.onStepEnd, () => ({
@@ -191,7 +198,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
           durationMs: Date.now() - stepStartedAt,
         }))
 
-        return { ...produced, events: emitted }
+        return { output: produced, events: emitted }
       } catch (error) {
         failedStep = step.name
         await ctx.journal.recordStep({
@@ -218,14 +225,16 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
 
     for (const event of result.events) mint(event)
 
+    // One rule: the undo is handed exactly what the step returned. Registered from the returned
+    // value and never from a closure taken during the step, because a closure does not survive a
+    // replay — the step's body will not run again, and anything living in it is gone.
     const compensate = step.compensate
-    const compensateWith = result.compensateWith
-    if (compensate && compensateWith !== undefined) {
+    if (compensate) {
       undos.push({
         seq: current,
         name: step.name,
         config: step.config,
-        run: (undoContext, reason) => compensate(compensateWith, undoContext, reason),
+        run: (undoContext, reason) => compensate(result.output, undoContext, reason),
       })
     }
 
@@ -241,22 +250,66 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     return result.output
   }
 
-  const handle: WorkflowHandle<Ctx> = {
-    emit: bodyEmit,
-    step: (step, input) => {
-      /*
-       * The engine keeps hold of every step that is still running, because `Promise.all`
-       * rejects the moment the first of them does while the others are still going. Unwinding
-       * there and then would leave a step that finished a millisecond later registering an undo
-       * with nobody left to run it: the effect stays, the run says it was compensated, and the
-       * two disagree for ever.
-       */
-      const running = runStep(step, input)
-      inflight.push(running.catch(() => undefined))
+  function stepCall<StepInput, StepOutput>(
+    step: Step<Ctx, StepInput, StepOutput>,
+    input: StepInput,
+  ): Promise<StepOutput>
+  function stepCall<StepOutput>(
+    name: string,
+    run: (ctx: StepContext<Ctx>) => Promise<StepOutput>,
+    options?: InlineStepOptions<Ctx, StepOutput>,
+  ): Promise<StepOutput>
+  function stepCall(first: unknown, second: unknown, third?: unknown): Promise<unknown> {
+    if (typeof first !== 'string') {
+      return runStep(first as Step<Ctx, unknown, unknown>, second)
+    }
 
-      return running
-    },
+    // The inline form is not a second, weaker path: it builds the same Step the reusable form
+    // builds — same name guard, same budget rules — and hands it to the same runner.
+    const declared = (third ?? {}) as InlineStepOptions<Ctx, unknown>
+    assertNameIsAvailable(first)
+
+    const inline: Step<Ctx, undefined, unknown> = {
+      name: first,
+      config: budgetOf(declared),
+      run: (_input, stepContext) =>
+        (second as (ctx: StepContext<Ctx>) => Promise<unknown>)(stepContext),
+      ...(declared.compensate === undefined ? {} : { compensate: declared.compensate }),
+    }
+
+    return runStep(inline, undefined)
   }
+
+  /*
+   * The engine keeps hold of every step that is still running, because `Promise.all` rejects the
+   * moment the first of them does while the others are still going. Unwinding there and then
+   * would leave a step that finished a millisecond later registering an undo with nobody left to
+   * run it: the effect stays, the run says it was compensated, and the two disagree for ever.
+   */
+  function trackedStep<StepInput, StepOutput>(
+    step: Step<Ctx, StepInput, StepOutput>,
+    input: StepInput,
+  ): Promise<StepOutput>
+  function trackedStep<StepOutput>(
+    name: string,
+    run: (ctx: StepContext<Ctx>) => Promise<StepOutput>,
+    options?: InlineStepOptions<Ctx, StepOutput>,
+  ): Promise<StepOutput>
+  function trackedStep(first: unknown, second: unknown, third?: unknown): Promise<unknown> {
+    const running =
+      typeof first === 'string'
+        ? stepCall(
+            first,
+            second as (ctx: StepContext<Ctx>) => Promise<unknown>,
+            third as InlineStepOptions<Ctx, unknown> | undefined,
+          )
+        : stepCall(first as Step<Ctx, unknown, unknown>, second)
+    inflight.push(running.catch(() => undefined))
+
+    return running
+  }
+
+  const handle: WorkflowHandle<Ctx> = { emit: bodyEmit, step: trackedStep }
 
   /*
    * Backwards, by the order the steps were STARTED in — which under concurrency is not the

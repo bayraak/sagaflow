@@ -26,8 +26,6 @@ describe('a step knows which attempt it is on', () => {
     const counting = createStep('count', {
       run: async (_input: { mark: string }, ctx: StepContext<TestRuntime>) => {
         seen.push(ctx.attempt)
-
-        return { output: null }
       },
     })
 
@@ -49,8 +47,6 @@ describe('a step knows which attempt it is on', () => {
       run: async (_input: { mark: string }, ctx: StepContext<TestRuntime>) => {
         seen.push(ctx.attempt)
         if (ctx.attempt < 3) throw new Error('not yet')
-
-        return { output: null }
       },
     })
 
@@ -80,8 +76,6 @@ describe('a step knows which attempt it is on', () => {
       run: async (_input: { mark: string }, ctx: StepContext<TestRuntime>) => {
         keys.push(ctx.idempotencyKey)
         if (ctx.attempt < 2) throw new Error('not yet')
-
-        return { output: null }
       },
     })
 
@@ -112,11 +106,8 @@ describe('a compensation is told why it is running', () => {
     const causes: string[] = []
 
     const undoable = createStep('undoable', {
-      run: async (input: { mark: string }) => ({
-        output: { seen: input.mark },
-        compensateWith: input.mark,
-      }),
-      compensate: async (_mark: string, _ctx: StepContext<TestRuntime>, why) => {
+      run: async (input: { mark: string }) => ({ seen: input.mark }),
+      compensate: async (_seen: { seen: string }, _ctx: StepContext<TestRuntime>, why) => {
         causes.push((why.cause as Error).message)
       },
     })
@@ -146,9 +137,9 @@ describe('a compensation is told why it is running', () => {
           runId: ctx.runId,
         })
 
-        return { output: { seen: input.mark }, compensateWith: input.mark }
+        return { seen: input.mark }
       },
-      compensate: async (_mark: string, _ctx: StepContext<TestRuntime>, why) => {
+      compensate: async (_seen: { seen: string }, _ctx: StepContext<TestRuntime>, why) => {
         causes.push(why.cause)
       },
     })
@@ -170,11 +161,8 @@ describe('a compensation is told why it is running', () => {
     const attempts: number[] = []
 
     const undoable = createStep('undoable', {
-      run: async (input: { mark: string }) => ({
-        output: { seen: input.mark },
-        compensateWith: input.mark,
-      }),
-      compensate: async (_mark: string, ctx: StepContext<TestRuntime>) => {
+      run: async (input: { mark: string }) => ({ seen: input.mark }),
+      compensate: async (_seen: { seen: string }, ctx: StepContext<TestRuntime>) => {
         attempts.push(ctx.attempt)
         if (ctx.attempt < 2) throw new Error('the undo is flaky too')
       },

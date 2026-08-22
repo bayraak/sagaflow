@@ -6,19 +6,19 @@ import { markInput } from './helpers/steps'
 
 const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-const late = createStep<TestRuntime, { mark: string }, { seen: string }, { undo: string }>('late', {
+const late = createStep<TestRuntime, { mark: string }, { seen: string }>('late', {
   run: async (input, ctx) => {
     await settle(5)
     ctx.invocations.push('invoke:late')
 
-    return { output: { seen: input.mark }, compensateWith: { undo: 'late' } }
+    return { seen: input.mark }
   },
-  compensate: async (undo, ctx) => {
-    ctx.invocations.push(`compensate:${undo.undo}`)
+  compensate: async (_seen, ctx) => {
+    ctx.invocations.push(`compensate:late`)
   },
 })
 
-const early = createStep<TestRuntime, { mark: string }, { seen: string }, never>('early', {
+const early = createStep<TestRuntime, { mark: string }, { seen: string }>('early', {
   run: async (_input, ctx) => {
     ctx.invocations.push('invoke:early')
 

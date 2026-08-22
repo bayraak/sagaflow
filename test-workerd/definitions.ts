@@ -30,15 +30,15 @@ const writeThing = createStep('write-thing', {
       .bind(ctx.idempotencyKey, ctx.tenantId, input.mark)
       .run()
 
-    return { output: { id: ctx.idempotencyKey }, compensateWith: ctx.idempotencyKey }
+    return { id: ctx.idempotencyKey }
   },
-  compensate: async (id: string, ctx: StepContext<TestRuntime>) => {
-    await ctx.db.prepare('delete from things where id = ?').bind(id).run()
+  compensate: async (written: { id: string }, ctx: StepContext<TestRuntime>) => {
+    await ctx.db.prepare('delete from things where id = ?').bind(written.id).run()
   },
 })
 
 const refuse = createStep('refuse', {
-  run: async (): Promise<{ output: never }> => {
+  run: async (): Promise<never> => {
     throw new Error('this step always refuses')
   },
 })

@@ -28,11 +28,7 @@ describe('README: the sixty-second example', () => {
     // ------------------------------------------------------------------------
 
     const reserveNumber = createStep('reserve-number', {
-      run: async (_input: { customerId: string }) => {
-        const number = await nextInvoiceNumber()
-
-        return { output: number, compensateWith: number }
-      },
+      run: async (_input: { customerId: string }) => nextInvoiceNumber(),
       compensate: async (number) => releaseInvoiceNumber(number),
     })
 
@@ -70,13 +66,13 @@ describe('README: compensation leaves a trail', () => {
     const refunded: string[] = []
 
     const charge = createStep('charge-card', {
-      run: async (input: { customerId: string; amount: number }, ctx) => {
+      run: async (_input: { customerId: string; amount: number }, ctx) => {
         charged.push(ctx.idempotencyKey)
 
-        return { output: { chargeId: 'ch_1' }, compensateWith: 'ch_1' }
+        return { chargeId: 'ch_1' }
       },
-      compensate: async (chargeId) => {
-        refunded.push(chargeId)
+      compensate: async (receipt) => {
+        refunded.push(receipt.chargeId)
       },
     })
 
@@ -129,8 +125,6 @@ describe('README: the same request asked twice', () => {
     const send = createStep('send-email', {
       run: async () => {
         sent += 1
-
-        return { output: { sent: true } }
       },
     })
 
@@ -168,8 +162,6 @@ describe('README: a durable workflow that waits', () => {
     const remind = createStep('send-reminder', {
       run: async (input: { invoiceId: string }) => {
         reminded.push(input.invoiceId)
-
-        return { output: { reminded: true } }
       },
     })
 

@@ -12,6 +12,12 @@ workflow engine. Cloudflare Workflows adapter included.
 
 Zero runtime dependencies. Your database, your tables, your process.
 
+**sagaflow adds no runtime. Every workflow is an async function; every fact is a row.** Bodies
+are `async`/`await`, validation is [Standard Schema](https://standardschema.dev) so you bring the
+validator you already have, ids come from Web Crypto, state is SQL you can read, and the sink is
+Queue-shaped. There is no custom runtime, no compiler step, no directives, no decorators and no
+generator-only API to learn.
+
 **Make every write a saga.** Not the occasional long-running job — every write. That is only a
 reasonable thing to ask if it is cheap and if the promises are checkable, so both are on the
 table: the [cost](#exactly-what-it-guarantees) in journal round trips, the
@@ -79,6 +85,16 @@ const result = await createInvoice.run({
   ctx: { tenantId: 'acme', journal, events: sink },
 })
 ```
+
+Or declare a step where you use it, which is what most steps want:
+
+```ts
+const invoice = await wf.step('reserve-number', async (ctx) => nextInvoiceNumber(ctx.tenantId), {
+  compensate: async (number) => releaseInvoiceNumber(number),
+})
+```
+
+Same engine path either way: same sequence, same record, same memoisation, same guards.
 
 That is a complete saga: validated input, a step that knows how to undo itself, a run record,
 and an event that is written down atomically with the run and delivered afterwards. Swap

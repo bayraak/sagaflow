@@ -5,18 +5,15 @@ import { createCachingPrimitive } from './helpers/primitive'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput } from './helpers/steps'
 
-const issuingStep = createStep<TestRuntime, { mark: string }, { seen: string }, { undo: string }>(
-  'issue',
-  {
-    run: async (input, ctx) => {
-      ctx.invocations.push('invoke:issue')
-      ctx.emit('invoice.issued', { invoiceId: input.mark, total: 10 })
+const issuingStep = createStep<TestRuntime, { mark: string }, { seen: string }>('issue', {
+  run: async (input, ctx) => {
+    ctx.invocations.push('invoke:issue')
+    ctx.emit('invoice.issued', { invoiceId: input.mark, total: 10 })
 
-      return { output: { seen: input.mark }, compensateWith: { undo: input.mark } }
-    },
-    compensate: async () => undefined,
+    return { seen: input.mark }
   },
-)
+  compensate: async () => undefined,
+})
 
 const replayable = defineWorkflow(
   { name: 'test.replayable', input: markInput, execution: 'durable' },

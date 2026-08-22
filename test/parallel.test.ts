@@ -25,35 +25,29 @@ const createGate = () => {
 const gatedSteps = () => {
   const gate = createGate()
 
-  const slow = createStep<TestRuntime, { mark: string }, { seen: string }, { undo: string }>(
-    'slow',
-    {
-      run: async (input, ctx) => {
-        ctx.invocations.push('invoke:slow')
-        await gate.passed
+  const slow = createStep<TestRuntime, { mark: string }, { seen: string }>('slow', {
+    run: async (input, ctx) => {
+      ctx.invocations.push('invoke:slow')
+      await gate.passed
 
-        return { output: { seen: input.mark }, compensateWith: { undo: 'slow' } }
-      },
-      compensate: async (undo, ctx) => {
-        ctx.invocations.push(`compensate:${undo.undo}`)
-      },
+      return { seen: input.mark }
     },
-  )
-
-  const quick = createStep<TestRuntime, { mark: string }, { seen: string }, { undo: string }>(
-    'quick',
-    {
-      run: async (input, ctx) => {
-        ctx.invocations.push('invoke:quick')
-        gate.open()
-
-        return { output: { seen: input.mark }, compensateWith: { undo: 'quick' } }
-      },
-      compensate: async (undo, ctx) => {
-        ctx.invocations.push(`compensate:${undo.undo}`)
-      },
+    compensate: async (_seen, ctx) => {
+      ctx.invocations.push(`compensate:slow`)
     },
-  )
+  })
+
+  const quick = createStep<TestRuntime, { mark: string }, { seen: string }>('quick', {
+    run: async (input, ctx) => {
+      ctx.invocations.push('invoke:quick')
+      gate.open()
+
+      return { seen: input.mark }
+    },
+    compensate: async (_seen, ctx) => {
+      ctx.invocations.push(`compensate:quick`)
+    },
+  })
 
   return { slow, quick }
 }

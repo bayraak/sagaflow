@@ -16,7 +16,7 @@ import { markInput } from './helpers/steps'
 // accepted the charge, the acknowledgement was lost, the step is retried — and without a key
 // that is stable across attempts, the customer is charged twice.
 const keyReportingStep = (name: string, options: { failsUntilAttempt?: number } = {}) =>
-  createStep<TestRuntime, { mark: string }, { key: string }, { key: string }>(name, {
+  createStep<TestRuntime, { mark: string }, { key: string }>(name, {
     run: async (_input, ctx) => {
       ctx.invocations.push(`invoke:${name}:${ctx.idempotencyKey}`)
       if (options.failsUntilAttempt !== undefined) {
@@ -24,9 +24,9 @@ const keyReportingStep = (name: string, options: { failsUntilAttempt?: number } 
         if (seen < options.failsUntilAttempt) throw new Error(`${name} refused`)
       }
 
-      return { output: { key: ctx.idempotencyKey }, compensateWith: { key: ctx.idempotencyKey } }
+      return { key: ctx.idempotencyKey }
     },
-    compensate: async (_undo, ctx) => {
+    compensate: async (_produced, ctx) => {
       ctx.invocations.push(`compensate:${name}:${ctx.idempotencyKey}`)
     },
   })
