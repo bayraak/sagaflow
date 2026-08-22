@@ -1,6 +1,7 @@
 import { claimRun } from './claim'
 import type { DurableWorkflow } from './define'
 import { messageOf } from './errors'
+import { compensatedEnvelope } from './events'
 import { validate } from './schema'
 import type { StandardSchemaV1, WorkflowLauncher, WorkflowRuntime } from './types'
 
@@ -106,11 +107,26 @@ export const startDurableWorkflow = async <
       },
     })
   } catch (error) {
+    // The run record exists and nothing is going to carry it out, so it is closed here — and
+    // closed the way every other run is, with the announcement that says so. A run that ended
+    // in silence is a run a consumer counting them never hears about.
     await ctx.journal.finishRun({
       tenantId: ctx.tenantId,
       runId,
       status: 'failed',
       error: messageOf(error),
+      events: [
+        compensatedEnvelope({
+          runId,
+          name: definition.name,
+          tenantId: ctx.tenantId,
+          actor: ctx.actor ?? null,
+          error: messageOf(error),
+          outcome: 'failed',
+          // The instance never existed, so this run has emitted nothing else.
+          ordinal: 0,
+        }),
+      ],
     })
 
     // Whatever the platform refused for, this attempt started nothing and its run record says

@@ -486,75 +486,94 @@ export const journalConformance = (
     }),
 
     withSubject(
-      'failAbandonedRuns closes inline runs older than the cutoff',
-      async ({ journal, runStatus }) => {
+      'listAbandonedRuns answers with inline runs older than the cutoff',
+      async ({ journal }) => {
         const runId = await openRun(journal, { execution: 'inline' })
 
-        const swept = await journal.failAbandonedRuns({
+        const abandoned = await journal.listAbandonedRuns({
           execution: 'inline',
           startedBefore: Date.now() + 60_000,
-          error: 'abandoned',
+          limit: 10,
         })
 
-        assertIs(swept, 1, 'the sweep says how many it closed')
-        assertIs(await runStatus({ tenantId: tenant, runId }), 'failed', 'an abandoned run failed')
+        assertSame(
+          abandoned,
+          [{ tenantId: tenant, runId, name: 'conformance.workflow' }],
+          'an abandoned run is answered with its tenant and its name, because closing it announces it',
+        )
       },
     ),
 
-    withSubject(
-      'failAbandonedRuns leaves younger inline runs alone',
-      async ({ journal, runStatus }) => {
-        const runId = await openRun(journal, { execution: 'inline' })
+    withSubject('listAbandonedRuns leaves younger inline runs alone', async ({ journal }) => {
+      await openRun(journal, { execution: 'inline' })
 
-        const swept = await journal.failAbandonedRuns({
-          execution: 'inline',
-          startedBefore: Date.now() - 60_000,
-          error: 'abandoned',
-        })
-
-        assertIs(swept, 0, 'nothing was old enough')
-        assertIs(await runStatus({ tenantId: tenant, runId }), 'running', 'the run is untouched')
-      },
-    ),
-
-    withSubject('failAbandonedRuns never touches a durable run', async ({ journal, runStatus }) => {
-      const runId = await openRun(journal, { execution: 'durable' })
-
-      const swept = await journal.failAbandonedRuns({
-        execution: 'inline',
-        startedBefore: Date.now() + 60_000,
-        error: 'abandoned',
-      })
-
-      assertIs(swept, 0, 'a durable run may sleep for a week')
-      assertIs(await runStatus({ tenantId: tenant, runId }), 'running', 'the run is untouched')
+      assertIs(
+        (
+          await journal.listAbandonedRuns({
+            execution: 'inline',
+            startedBefore: Date.now() - 60_000,
+            limit: 10,
+          })
+        ).length,
+        0,
+        'nothing was old enough',
+      )
     }),
 
-    withSubject(
-      'failAbandonedRuns never touches a run that ended',
-      async ({ journal, runStatus }) => {
-        const runId = await openRun(journal, { execution: 'inline' })
-        await closeRun(journal, runId, 'completed')
+    withSubject('listAbandonedRuns never answers with a durable run', async ({ journal }) => {
+      await openRun(journal, { execution: 'durable' })
 
-        const swept = await journal.failAbandonedRuns({
-          execution: 'inline',
-          startedBefore: Date.now() + 60_000,
-          error: 'abandoned',
-        })
+      assertIs(
+        (
+          await journal.listAbandonedRuns({
+            execution: 'inline',
+            startedBefore: Date.now() + 60_000,
+            limit: 10,
+          })
+        ).length,
+        0,
+        'a durable run may sleep for a week',
+      )
+    }),
 
-        assertIs(swept, 0, 'a closed run is nobody needs to worry about')
-        assertIs(await runStatus({ tenantId: tenant, runId }), 'completed', 'the run is untouched')
-      },
-    ),
+    withSubject('listAbandonedRuns never answers with a run that ended', async ({ journal }) => {
+      const runId = await openRun(journal, { execution: 'inline' })
+      await closeRun(journal, runId, 'completed')
 
-    withSubject('failAbandonedRuns releases the key of the run it closed', async ({ journal }) => {
+      assertIs(
+        (
+          await journal.listAbandonedRuns({
+            execution: 'inline',
+            startedBefore: Date.now() + 60_000,
+            limit: 10,
+          })
+        ).length,
+        0,
+        'a closed run needs nobody to close it',
+      )
+    }),
+
+    withSubject('listAbandonedRuns honours the limit', async ({ journal }) => {
+      for (let opened = 0; opened < 3; opened += 1) await openRun(journal, { execution: 'inline' })
+
+      assertIs(
+        (
+          await journal.listAbandonedRuns({
+            execution: 'inline',
+            startedBefore: Date.now() + 60_000,
+            limit: 2,
+          })
+        ).length,
+        2,
+        'a sweep takes no more than it asked for',
+      )
+    }),
+
+    // Closing an abandoned run releases its key like any other ending, so the work can be asked
+    // for again.
+    withSubject('a swept run releases its key', async ({ journal }) => {
       const runId = await openRun(journal, { execution: 'inline', idempotencyKey: 'key-swept' })
-
-      await journal.failAbandonedRuns({
-        execution: 'inline',
-        startedBefore: Date.now() + 60_000,
-        error: 'abandoned',
-      })
+      await closeRun(journal, runId, 'failed')
 
       const second = await openRun(journal, { execution: 'inline', idempotencyKey: 'key-swept' })
 

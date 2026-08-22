@@ -175,14 +175,17 @@ export type RunJournal = {
     limit: number
   }) => Promise<{ tenantId: string; envelope: EventEnvelope }[]>
   /**
-   * Close the inline runs started before the cutoff that are still `running`, and answer how
-   * many. Durable runs are never touched: one may legitimately sleep for a week.
+   * The runs of the given kind that were started before the cutoff and are still `running`.
+   *
+   * A list rather than a bulk update, because closing a run is not only a status change: every
+   * closed run announces itself, and an announcement needs the run's name and its tenant. The
+   * sweeper closes each one through `finishRun`, like everything else that closes a run.
    */
-  failAbandonedRuns: (params: {
+  listAbandonedRuns: (params: {
     execution: 'inline'
     startedBefore: number
-    error: string
-  }) => Promise<number>
+    limit: number
+  }) => Promise<{ tenantId: string; runId: string; name: string }[]>
   /** Held runs only, by the same rule `insertRun` refuses by. */
   findRunByIdempotencyKey: (params: {
     tenantId: string

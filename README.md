@@ -369,6 +369,10 @@ A compensated run's outbox holds exactly that one event and nothing the body emi
 did not happen, but the fact that the run was undone is something an audit log and an operator
 both want.
 
+**Exactly one of them per closed run** — including the two endings that are easy to forget: a run
+the sweeper closes because nobody was left to finish it, and a run whose platform refused to
+start it after the record already existed. Both announce themselves like any other.
+
 Delivery is at-least-once. Run `sweepEventOutbox` on a schedule for whatever a run's own drain
 could not deliver, and dedupe on the envelope id at the consumer.
 

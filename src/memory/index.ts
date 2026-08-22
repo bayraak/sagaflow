@@ -175,21 +175,16 @@ export const createMemoryJournal = (options: { now?: () => number } = {}): Memor
         .toSorted((left, right) => left.occurredAt - right.occurredAt)
         .slice(0, params.limit)
         .map((envelope) => ({ tenantId: envelope.tenantId, envelope })),
-    failAbandonedRuns: async (params) => {
-      const abandoned = runs.filter(
-        (run) =>
-          run.execution === params.execution &&
-          run.status === 'running' &&
-          run.startedAt < params.startedBefore,
-      )
-
-      for (const run of abandoned) {
-        run.status = 'failed'
-        run.error = params.error
-      }
-
-      return abandoned.length
-    },
+    listAbandonedRuns: async (params) =>
+      runs
+        .filter(
+          (run) =>
+            run.execution === params.execution &&
+            run.status === 'running' &&
+            run.startedAt < params.startedBefore,
+        )
+        .slice(0, params.limit)
+        .map((run) => ({ tenantId: run.tenantId, runId: run.id, name: run.name })),
     findRunByIdempotencyKey: async (params) => {
       const run = heldRun(params.tenantId, params.idempotencyKey)
 

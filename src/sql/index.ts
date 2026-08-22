@@ -19,6 +19,7 @@ export const defaultTableNames: SqlTableNames = {
 type RunRow = { id: string; status: string; output: string | null }
 type CancelRow = { cancel_requested: number }
 type OutboxRow = { tenant_id: string; payload: string }
+type AbandonedRow = { id: string; tenant_id: string; name: string }
 
 const heldStatuses = "('running', 'completed')"
 
@@ -223,20 +224,16 @@ export const createSqlJournal = (
       }))
     },
 
-    failAbandonedRuns: async (params) => {
-      const answered = await driver.run({
-        sql: `update ${tables.runs}
-              set status = 'failed', error = ?, finished_at = ?
-              where execution = ? and status = 'running' and started_at < ?`,
-        params: [
-          params.error,
-          now(),
-          params.execution satisfies WorkflowExecution,
-          params.startedBefore,
-        ],
+    listAbandonedRuns: async (params) => {
+      const rows = await driver.all<AbandonedRow>({
+        sql: `select id, tenant_id, name from ${tables.runs}
+              where execution = ? and status = 'running' and started_at < ?
+              order by started_at
+              limit ?`,
+        params: [params.execution satisfies WorkflowExecution, params.startedBefore, params.limit],
       })
 
-      return answered.changes
+      return rows.map((row) => ({ tenantId: row.tenant_id, runId: row.id, name: row.name }))
     },
   }
 }

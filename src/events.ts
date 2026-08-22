@@ -1,6 +1,11 @@
 import { envelopeId } from './identity'
 import { validateSync } from './schema'
-import type { EventEnvelope, EventSchemaMap, LifecycleEventType } from './types'
+import type {
+  CompensationOutcome,
+  EventEnvelope,
+  EventSchemaMap,
+  LifecycleEventType,
+} from './types'
 
 /**
  * Facts the engine states about the run itself, declared once. `LifecycleEventPayloads` in
@@ -58,6 +63,35 @@ export type RawEvent = { type: string; payload: unknown }
  * a second write of the same run's events land on the rows that already exist instead of
  * handing the consumer a copy it has never seen an id for.
  */
+/**
+ * How a run that did not complete says so. Built here rather than at each of the three places
+ * that close a run badly — the engine unwinding, the sweeper closing an abandoned run, a start
+ * whose platform refused — because "exactly one lifecycle event per closed run" is only an
+ * invariant if all three write the same thing.
+ */
+export const compensatedEnvelope = (options: {
+  runId: string
+  name: string
+  tenantId: string
+  actor: string | null
+  error: string
+  outcome: CompensationOutcome
+  ordinal: number
+}): EventEnvelope =>
+  createEnvelope({
+    type: lifecycleEvents.compensated,
+    payload: {
+      runId: options.runId,
+      name: options.name,
+      error: options.error,
+      outcome: options.outcome,
+    },
+    tenantId: options.tenantId,
+    actor: options.actor,
+    runId: options.runId,
+    ordinal: options.ordinal,
+  })
+
 export const createEnvelope = (options: {
   type: string
   payload: unknown
