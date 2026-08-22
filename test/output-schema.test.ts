@@ -2,7 +2,8 @@ import { describe, expect, it } from 'bun:test'
 
 import { z } from 'zod'
 
-import { defineWorkflow, WorkflowError, type WorkflowHandle } from '../src/index'
+import { defineWorkflow } from '../src/define.js'
+import { SagaError, type WorkflowHandle } from '../src/index.js'
 import { createTestRuntime, firstRun, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
 
@@ -38,7 +39,7 @@ describe('a workflow can declare what it returns', () => {
       .run({ input: { mark: 'INV-2' }, ctx: harness.ctx })
       .catch((error: unknown) => error)
 
-    expect(thrown).toBeInstanceOf(WorkflowError)
+    expect(thrown).toBeInstanceOf(SagaError)
     expect(harness.invocations).toEqual(['invoke:issue', 'compensate:issue'])
     expect(firstRun(harness.runs).status).toBe('compensated')
   })

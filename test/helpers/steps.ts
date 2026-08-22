@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { createStep, type StepBudget } from '../../src/index'
+import { step, type StepBudget } from '../../src/index'
 import type { TestRuntime } from './runtime'
 
 export const markInput = z.object({ mark: z.string().min(1) })
@@ -19,14 +19,14 @@ export const markStep = (
     withoutCompensation?: boolean
   } = {},
 ) =>
-  createStep<TestRuntime, MarkInput, MarkOutput>(name, {
+  step<TestRuntime, MarkInput, MarkOutput>(name, {
     run: async (input, ctx) => {
       ctx.invocations.push(`invoke:${name}`)
       if (options.fails) throw new Error(`${name} refused`)
 
       return { seen: `${name}:${input.mark}` }
     },
-    compensate: options.withoutCompensation
+    undo: options.withoutCompensation
       ? undefined
       : async (_seen, ctx) => {
           ctx.invocations.push(`compensate:${name}`)

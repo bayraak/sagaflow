@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'bun:test'
 
+import { defineWorkflow } from '../src/define.js'
 import {
-  defineWorkflow,
   executeDurable,
   type DurableWorkflow,
   type DurableWorkflowHandle,
   type InlineWorkflow,
   type WorkflowHandle,
-} from '../src/index'
+} from '../src/index.js'
 import { createFakePrimitive } from './helpers/primitive'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput } from './helpers/steps'

@@ -1,24 +1,24 @@
 import { describe, expect, it } from 'bun:test'
 
+import { defineWorkflow } from '../src/define.js'
 import {
-  createStep,
-  defineWorkflow,
+  step,
   requestCancellation,
-  WorkflowCancelledError,
-  WorkflowError,
+  SagaCancelledError,
+  SagaError,
   type WorkflowHandle,
-} from '../src/index'
+} from '../src/index.js'
 import { createTestRuntime, firstRun, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
 
-const cancelling = createStep<TestRuntime, { mark: string }, { seen: string }>('first', {
+const cancelling = step<TestRuntime, { mark: string }, { seen: string }>('first', {
   run: async (input, ctx) => {
     ctx.invocations.push('invoke:first')
     await requestCancellation({ journal: ctx.journal, tenantId: ctx.tenantId, runId: ctx.runId })
 
     return { seen: input.mark }
   },
-  compensate: async (_seen, ctx) => {
+  undo: async (_seen, ctx) => {
     ctx.invocations.push('compensate:first')
   },
 })
@@ -47,9 +47,9 @@ describe('a body that swallows the cancellation', () => {
       .run({ input: { mark: 'x' }, ctx: harness.ctx })
       .catch((error: unknown) => error)
 
-    expect(thrown).toBeInstanceOf(WorkflowError)
-    expect(thrown instanceof WorkflowError && thrown.outcome).toBe('cancelled')
-    expect(thrown instanceof WorkflowError && thrown.cause).toBeInstanceOf(WorkflowCancelledError)
+    expect(thrown).toBeInstanceOf(SagaError)
+    expect(thrown instanceof SagaError && thrown.outcome).toBe('cancelled')
+    expect(thrown instanceof SagaError && thrown.cause).toBeInstanceOf(SagaCancelledError)
   })
 
   it('closes the run as cancelled, with the work undone', async () => {

@@ -1,6 +1,6 @@
 import { stableHash } from './canonical.js'
 import { executeRun } from './engine.js'
-import { WorkflowError } from './errors.js'
+import { SagaError } from './errors.js'
 import { createInlineRunner } from './retry.js'
 import { SchemaError, validate } from './schema.js'
 import type {
@@ -227,7 +227,7 @@ const attempt = async <Output>(
   try {
     return { ok: true, ...(await run()) }
   } catch (error) {
-    if (error instanceof WorkflowError) {
+    if (error instanceof SagaError) {
       return {
         ok: false,
         runId: error.runId,

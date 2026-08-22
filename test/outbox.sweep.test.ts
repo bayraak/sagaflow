@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { sweepEventOutbox, type EventEnvelope } from '../src/index'
+import { sweepEventOutbox, type EventEnvelope } from '../src/index.js'
 import { createMemoryJournal, createMemorySink } from '../src/memory/index'
 
 const envelope = (options: {

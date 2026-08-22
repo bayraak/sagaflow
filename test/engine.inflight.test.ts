@@ -1,24 +1,25 @@
 import { describe, expect, it } from 'bun:test'
 
-import { createStep, defineWorkflow, type WorkflowHandle } from '../src/index'
+import { defineWorkflow } from '../src/define.js'
+import { step, type WorkflowHandle } from '../src/index.js'
 import { createTestRuntime, firstRun, type TestRuntime } from './helpers/runtime'
 import { markInput } from './helpers/steps'
 
 const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-const late = createStep<TestRuntime, { mark: string }, { seen: string }>('late', {
+const late = step<TestRuntime, { mark: string }, { seen: string }>('late', {
   run: async (input, ctx) => {
     await settle(5)
     ctx.invocations.push('invoke:late')
 
     return { seen: input.mark }
   },
-  compensate: async (_seen, ctx) => {
+  undo: async (_seen, ctx) => {
     ctx.invocations.push(`compensate:late`)
   },
 })
 
-const early = createStep<TestRuntime, { mark: string }, { seen: string }>('early', {
+const early = step<TestRuntime, { mark: string }, { seen: string }>('early', {
   run: async (_input, ctx) => {
     ctx.invocations.push('invoke:early')
 
@@ -51,7 +52,7 @@ describe('a step still running when another one fails', () => {
 
     await racing.run({ input: { mark: 'x' }, ctx: harness.ctx }).catch(() => undefined)
 
-    expect(harness.steps.map((step) => [step.name, step.status])).toEqual([
+    expect(harness.steps.map((row) => [row.name, row.status])).toEqual([
       ['early', 'failed'],
       ['late', 'completed'],
       ['compensate:late', 'compensated'],

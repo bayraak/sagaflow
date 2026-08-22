@@ -1,5 +1,5 @@
-import { WorkflowCancelledError } from './cancel.js'
-import { messageOf, WorkflowError } from './errors.js'
+import { SagaCancelledError } from './cancel.js'
+import { messageOf, SagaError } from './errors.js'
 import { createEnvelope, lifecycleEvents, validateEmission, type RawEvent } from './events.js'
 import { compensationIdempotencyKey, stepIdempotencyKey } from './identity.js'
 import { dispatchEvents } from './outbox.js'
@@ -157,7 +157,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     // Once the run has been told to stop, nothing else starts. A body is somebody else's code
     // and somebody else's code has try/catch in it; swallowing the cancellation must not buy
     // it another step.
-    if (cancelledAfter !== null) throw new WorkflowCancelledError(runId)
+    if (cancelledAfter !== null) throw new SagaCancelledError(runId)
 
     /*
      * The most expensive durable bug there is, and completely silent: a platform memoises step
@@ -250,13 +250,13 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     // One rule: the undo is handed exactly what the step returned. Registered from the returned
     // value and never from a closure taken during the step, because a closure does not survive a
     // replay — the step's body will not run again, and anything living in it is gone.
-    const compensate = step.compensate
-    if (compensate) {
+    const declaredUndo = step.undo
+    if (declaredUndo) {
       undos.push({
         seq: current,
         name: step.name,
         config: step.config,
-        run: (undoContext, reason) => compensate(result.output, undoContext, reason),
+        run: (undoContext, reason) => declaredUndo(result.output, undoContext, reason),
       })
     }
 
@@ -266,7 +266,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     if (cancellationRequested) {
       cancelledAfter = step.name
 
-      throw new WorkflowCancelledError(runId)
+      throw new SagaCancelledError(runId)
     }
 
     return result.output
@@ -296,7 +296,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
       config: budgetOf(declared),
       run: (_input, stepContext) =>
         (second as (ctx: StepContext<Ctx>) => Promise<unknown>)(stepContext),
-      ...(declared.compensate === undefined ? {} : { compensate: declared.compensate }),
+      ...(declared.undo === undefined ? {} : { undo: declared.undo }),
     }
 
     return runStep(inline, undefined)
@@ -331,7 +331,13 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     return running
   }
 
-  const handle: WorkflowHandle<Ctx> = { emit: bodyEmit, step: trackedStep, all }
+  const handle: WorkflowHandle<Ctx> = {
+    runtime: ctx,
+    runId,
+    emit: bodyEmit,
+    step: trackedStep,
+    all,
+  }
 
   /*
    * Backwards, by the order the steps were STARTED in — which under concurrency is not the
@@ -429,7 +435,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
 
     // Stopping is not the body's decision. A body that caught the cancellation and carried on
     // does not get to hand back a completed run.
-    if (cancelledAfter !== null) throw new WorkflowCancelledError(runId)
+    if (cancelledAfter !== null) throw new SagaCancelledError(runId)
 
     /*
      * A body that returns the wrong thing is a body that failed, however cheerfully it
@@ -449,7 +455,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     // `failed` like any other run that left something standing — calling that one cancelled
     // would tell a reader the tenant was left whole.
     const outcome: CompensationOutcome =
-      error instanceof WorkflowCancelledError && undone === 'compensated' ? 'cancelled' : undone
+      error instanceof SagaCancelledError && undone === 'compensated' ? 'cancelled' : undone
 
     /*
      * What the body held is dropped with the run: a compensated run never happened, so nothing
@@ -484,7 +490,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
       durationMs: Date.now() - startedAt,
     }))
 
-    throw new WorkflowError({
+    throw new SagaError({
       runId,
       workflowName: name,
       stepName: failedStep ?? cancelledAfter,

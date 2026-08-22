@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { WorkflowError } from '../src/index'
+import { SagaError } from '../src/index.js'
 import { completingWorkflow, failingWorkflow } from './helpers/edges'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 
@@ -31,7 +31,7 @@ describe('the journal refusing mid-run', () => {
       .run({ input: { mark: 'x' }, ctx: refusing })
       .catch((error: unknown) => error)
 
-    expect(thrown).toBeInstanceOf(WorkflowError)
+    expect(thrown).toBeInstanceOf(SagaError)
     expect(invocations).toContain('invoke:only')
     expect(runs[0]?.status).toBe('compensated')
   })
@@ -77,7 +77,7 @@ describe('the journal refusing mid-run', () => {
       .run({ input: { mark: 'x' }, ctx: refusing })
       .catch((error: unknown) => error)
 
-    expect(thrown).not.toBeInstanceOf(WorkflowError)
+    expect(thrown).not.toBeInstanceOf(SagaError)
     expect((thrown as Error).message).toContain('the journal refused finishRun')
     expect(sent).toEqual([])
   })

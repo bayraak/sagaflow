@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'bun:test'
 
+import { defineWorkflow } from '../src/define.js'
 import {
-  defineWorkflow,
   executeDurable,
-  WorkflowError,
+  SagaError,
   type DurableWorkflowHandle,
   type StepPrimitive,
   type StepBudget,
-} from '../src/index'
+} from '../src/index.js'
 import { createFakePrimitive } from './helpers/primitive'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
@@ -173,7 +173,7 @@ describe('the durable executor drives the same body through step primitives', ()
 
     const thrown = await durableRun(durableWorkflow({ failOn: 'second' }), harness, primitive)
 
-    expect(thrown).toBeInstanceOf(WorkflowError)
+    expect(thrown).toBeInstanceOf(SagaError)
     expect(harness.steps.find((step) => step.name === 'compensate:first')?.status).toBe(
       'compensated',
     )

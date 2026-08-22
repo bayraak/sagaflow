@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { WorkflowError } from '../src/index'
+import { SagaError } from '../src/index.js'
 import { createTestRuntime, firstRun } from './helpers/runtime'
 import { threeStepWorkflow } from './helpers/workflows'
 
@@ -78,11 +78,11 @@ describe('a failing step is undone in reverse', () => {
       .run({ input: { mark: 'x' }, ctx })
       .catch((error: unknown) => error)
 
-    expect(thrown).toBeInstanceOf(WorkflowError)
-    expect(thrown instanceof WorkflowError && thrown.runId).toBe('run_1')
-    expect(thrown instanceof WorkflowError && thrown.workflowName).toBe('test.three-steps')
-    expect(thrown instanceof WorkflowError && thrown.stepName).toBe('third')
-    expect(thrown instanceof WorkflowError && thrown.outcome).toBe('compensated')
+    expect(thrown).toBeInstanceOf(SagaError)
+    expect(thrown instanceof SagaError && thrown.runId).toBe('run_1')
+    expect(thrown instanceof SagaError && thrown.workflowName).toBe('test.three-steps')
+    expect(thrown instanceof SagaError && thrown.stepName).toBe('third')
+    expect(thrown instanceof SagaError && thrown.outcome).toBe('compensated')
   })
 
   it('keeps the original failure as the cause', async () => {
@@ -92,9 +92,7 @@ describe('a failing step is undone in reverse', () => {
       .run({ input: { mark: 'x' }, ctx })
       .catch((error: unknown) => error)
 
-    expect(thrown instanceof WorkflowError && (thrown.cause as Error).message).toBe(
-      'second refused',
-    )
+    expect(thrown instanceof SagaError && (thrown.cause as Error).message).toBe('second refused')
   })
 
   it('does not retry a failing step inline', async () => {

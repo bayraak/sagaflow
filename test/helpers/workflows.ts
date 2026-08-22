@@ -1,4 +1,5 @@
-import { defineWorkflow, type WorkflowHandle } from '../../src/index'
+import { defineWorkflow } from '../../src/define.js'
+import { type WorkflowHandle } from '../../src/index'
 import type { TestRuntime } from './runtime'
 import { markInput, markStep } from './steps'
 

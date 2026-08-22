@@ -1,26 +1,26 @@
 import { describe, expect, it } from 'bun:test'
 
+import { defineWorkflow } from '../src/define.js'
 import {
-  createStep,
-  defineWorkflow,
+  step,
   executeDurable,
-  WorkflowError,
+  SagaError,
   type DurableWorkflowHandle,
   type WorkflowHandle,
-} from '../src/index'
+} from '../src/index.js'
 import { passThroughPrimitive } from './helpers/primitive'
 import { createTestRuntime, firstFinish, type TestRuntime } from './helpers/runtime'
 import { markInput } from './helpers/steps'
 
 const writeStep = (options: { fails?: boolean } = {}) =>
-  createStep<TestRuntime, { mark: string }, { seen: string }>('write', {
+  step<TestRuntime, { mark: string }, { seen: string }>('write', {
     run: async (input, ctx) => {
       ctx.emit('invoice.issued', { invoiceId: input.mark, total: 1 })
       if (options.fails) throw new Error('write refused')
 
       return { seen: input.mark }
     },
-    compensate: async () => undefined,
+    undo: async () => undefined,
   })
 
 const savingWorkflow = (options: { fails?: boolean } = {}) =>
@@ -203,7 +203,7 @@ describe('a sink that cannot be reached', () => {
       passThroughPrimitive(),
     ).catch((error: unknown) => error)
 
-    expect(result).not.toBeInstanceOf(WorkflowError)
+    expect(result).not.toBeInstanceOf(SagaError)
     expect(result).toEqual({ finished: 'OUTBOX-12' })
     expect(harness.outbox).toHaveLength(3)
   })

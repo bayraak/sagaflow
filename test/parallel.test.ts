@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'bun:test'
 
+import { defineWorkflow } from '../src/define.js'
 import {
-  createStep,
-  defineWorkflow,
+  step,
   executeDurable,
   type DurableWorkflowHandle,
   type WorkflowHandle,
-} from '../src/index'
+} from '../src/index.js'
 import { createCachingPrimitive, passThroughPrimitive } from './helpers/primitive'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
@@ -25,26 +25,26 @@ const createGate = () => {
 const gatedSteps = () => {
   const gate = createGate()
 
-  const slow = createStep<TestRuntime, { mark: string }, { seen: string }>('slow', {
+  const slow = step<TestRuntime, { mark: string }, { seen: string }>('slow', {
     run: async (input, ctx) => {
       ctx.invocations.push('invoke:slow')
       await gate.passed
 
       return { seen: input.mark }
     },
-    compensate: async (_seen, ctx) => {
+    undo: async (_seen, ctx) => {
       ctx.invocations.push(`compensate:slow`)
     },
   })
 
-  const quick = createStep<TestRuntime, { mark: string }, { seen: string }>('quick', {
+  const quick = step<TestRuntime, { mark: string }, { seen: string }>('quick', {
     run: async (input, ctx) => {
       ctx.invocations.push('invoke:quick')
       gate.open()
 
       return { seen: input.mark }
     },
-    compensate: async (_seen, ctx) => {
+    undo: async (_seen, ctx) => {
       ctx.invocations.push(`compensate:quick`)
     },
   })
@@ -81,7 +81,7 @@ describe('steps a body runs at the same time', () => {
 
     await workflow.run({ input: { mark: 'x' }, ctx: harness.ctx })
 
-    expect(harness.steps.map((step) => [step.name, step.seq]).toSorted()).toEqual([
+    expect(harness.steps.map((row) => [row.name, row.seq]).toSorted()).toEqual([
       ['quick', 1],
       ['slow', 0],
     ])

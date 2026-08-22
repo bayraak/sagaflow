@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 
-import { defineWorkflow, startDurableWorkflow, sweepAbandonedRuns } from '../src/index'
-import type { DurableWorkflowHandle } from '../src/index'
+import { defineWorkflow } from '../src/define.js'
+import { startDurableWorkflow, sweepAbandonedRuns } from '../src/index.js'
+import type { DurableWorkflowHandle } from '../src/index.js'
 import { createMemoryJournal } from '../src/memory/index'
 import { completingWorkflow, failingWorkflow } from './helpers/edges'
 import { createLauncher } from './helpers/launcher'

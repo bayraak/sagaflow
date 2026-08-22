@@ -1,14 +1,10 @@
 import { describe, expect, it } from 'bun:test'
 
-import {
-  createStep,
-  defineWorkflow,
-  executeDurable,
-  WorkflowError,
-  type StepPrimitive,
-} from 'sagaflow'
+import { step, executeDurable, SagaError, type StepPrimitive } from 'sagaflow'
 import { createMemoryJournal, createMemorySink } from 'sagaflow/memory'
 import { z } from 'zod'
+
+import { defineWorkflow } from '../src/define.js'
 
 // Every example in the README lives here, compiled and run, so the first thing a reader
 // copies is the thing the suite proves. Keep the two in step: if you change one, change both.
@@ -27,9 +23,9 @@ describe('README: the sixty-second example', () => {
     }
     // ------------------------------------------------------------------------
 
-    const reserveNumber = createStep('reserve-number', {
+    const reserveNumber = step('reserve-number', {
       run: async (_input: { customerId: string }) => nextInvoiceNumber(),
-      compensate: async (number) => releaseInvoiceNumber(number),
+      undo: async (number) => releaseInvoiceNumber(number),
     })
 
     const createInvoice = defineWorkflow(
@@ -65,18 +61,18 @@ describe('README: compensation leaves a trail', () => {
     const charged: string[] = []
     const refunded: string[] = []
 
-    const charge = createStep('charge-card', {
+    const charge = step('charge-card', {
       run: async (_input: { customerId: string; amount: number }, ctx) => {
         charged.push(ctx.idempotencyKey)
 
         return { chargeId: 'ch_1' }
       },
-      compensate: async (receipt) => {
+      undo: async (receipt) => {
         refunded.push(receipt.chargeId)
       },
     })
 
-    const ship = createStep('ship-order', {
+    const ship = step('ship-order', {
       run: async () => {
         throw new Error('out of stock')
       },
@@ -105,10 +101,10 @@ describe('README: compensation leaves a trail', () => {
       })
       .catch((error: unknown) => error)
 
-    expect(failure).toBeInstanceOf(WorkflowError)
+    expect(failure).toBeInstanceOf(SagaError)
     expect(refunded).toEqual(['ch_1'])
     expect(runs[0]?.status).toBe('compensated')
-    expect(steps.map((step) => [step.name, step.status])).toEqual([
+    expect(steps.map((row) => [row.name, row.status])).toEqual([
       ['charge-card', 'completed'],
       ['ship-order', 'failed'],
       ['compensate:charge-card', 'compensated'],
@@ -122,7 +118,7 @@ describe('README: the same request asked twice', () => {
   it('does the work once and answers the second caller with the first result', async () => {
     let sent = 0
 
-    const send = createStep('send-email', {
+    const send = step('send-email', {
       run: async () => {
         sent += 1
       },
@@ -159,7 +155,7 @@ describe('README: a durable workflow that waits', () => {
   it('sleeps, waits for a signal, and is driven in a test by a fake platform', async () => {
     const reminded: string[] = []
 
-    const remind = createStep('send-reminder', {
+    const remind = step('send-reminder', {
       run: async (input: { invoiceId: string }) => {
         reminded.push(input.invoiceId)
       },

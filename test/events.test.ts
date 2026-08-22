@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { WorkflowError, type WorkflowRuntime } from '../src/index'
+import { SagaError, type WorkflowRuntime } from '../src/index.js'
 import { emittingWorkflow } from './helpers/emitting'
 import type { TestEventSchemas } from './helpers/events'
 import { createTestRuntime, firstRun } from './helpers/runtime'
@@ -99,7 +99,7 @@ describe('events are held until the run succeeds', () => {
       .run({ input: { mark: 'INV-1' }, ctx })
       .catch((error: unknown) => error)
 
-    expect(thrown).toBeInstanceOf(WorkflowError)
+    expect(thrown).toBeInstanceOf(SagaError)
     expect(sent).toEqual([])
     expect(firstRun(runs).status).toBe('compensated')
   })

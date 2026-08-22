@@ -19,6 +19,8 @@ export type MemoryRunRow = {
   status: RunStatus
   cancelRequested: boolean
   startedAt: number
+  finishedAt?: number | null
+  replayOf?: string | null
   output?: unknown
   error?: string | null
 }
@@ -170,10 +172,39 @@ export const createMemoryJournal = (options: { now?: () => number } = {}): Memor
       run.status = params.status
       run.output = params.output
       run.error = params.error ?? null
+      run.finishedAt = now()
     },
     markEventsDispatched: async (params) => {
       dispatched.push(...params.ids)
     },
+    getRun: async (params) => {
+      const run = runOf(params.tenantId, params.runId)
+      if (!run) return null
+
+      return {
+        id: run.id,
+        name: run.name,
+        execution: run.execution,
+        status: run.status,
+        input: run.input,
+        output: run.output ?? null,
+        error: run.error ?? null,
+        parentRunId: run.parentRunId,
+        replayOf: run.replayOf ?? null,
+        startedAt: run.startedAt,
+        finishedAt: run.finishedAt ?? null,
+      }
+    },
+    listRunSteps: async (params) =>
+      steps
+        .filter((row) => row.tenantId === params.tenantId && row.runId === params.runId)
+        .map((row) => ({
+          seq: row.seq,
+          name: row.name,
+          status: row.status,
+          attempt: row.attempt,
+          error: row.error ?? null,
+        })),
     listUndispatchedEvents: async (params) =>
       outbox
         .filter((event) => !dispatched.includes(event.id) && event.occurredAt <= params.before)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { executeDurable } from '../src/index'
+import { executeDurable } from '../src/index.js'
 import { durableCompletingWorkflow } from './helpers/edges'
 import { passThroughPrimitive } from './helpers/primitive'
 import { createTestRuntime } from './helpers/runtime'

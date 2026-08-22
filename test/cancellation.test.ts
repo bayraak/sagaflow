@@ -1,27 +1,27 @@
 import { describe, expect, it } from 'bun:test'
 
+import { defineWorkflow } from '../src/define.js'
 import {
-  createStep,
-  defineWorkflow,
+  step,
   requestCancellation,
-  WorkflowCancelledError,
-  WorkflowError,
+  SagaCancelledError,
+  SagaError,
   type WorkflowHandle,
-} from '../src/index'
+} from '../src/index.js'
 import { createTestRuntime, firstRun, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
 
 // Somebody asking for the run to stop, from outside it. Doing it from inside a step is how a
 // suite makes "the request arrived between two steps" happen at a known moment.
 const cancellingStep = (name: string, options: { compensateFails?: boolean } = {}) =>
-  createStep<TestRuntime, { mark: string }, { seen: string }>(name, {
+  step<TestRuntime, { mark: string }, { seen: string }>(name, {
     run: async (input, ctx) => {
       ctx.invocations.push(`invoke:${name}`)
       await requestCancellation({ journal: ctx.journal, tenantId: ctx.tenantId, runId: ctx.runId })
 
       return { seen: input.mark }
     },
-    compensate: async (_seen, ctx) => {
+    undo: async (_seen, ctx) => {
       ctx.invocations.push(`compensate:${name}`)
       if (options.compensateFails) throw new Error(`${name} could not be undone`)
     },
@@ -59,7 +59,7 @@ describe('a run can be asked to stop', () => {
       .run({ input: { mark: 'x' }, ctx: harness.ctx })
       .catch(() => undefined)
 
-    expect(harness.steps.map((step) => [step.name, step.status])).toEqual([
+    expect(harness.steps.map((row) => [row.name, row.status])).toEqual([
       ['first', 'completed'],
       ['compensate:first', 'compensated'],
     ])
@@ -94,9 +94,9 @@ describe('a run can be asked to stop', () => {
       .run({ input: { mark: 'x' }, ctx: harness.ctx })
       .catch((error: unknown) => error)
 
-    expect(thrown).toBeInstanceOf(WorkflowError)
-    expect(thrown instanceof WorkflowError && thrown.outcome).toBe('cancelled')
-    expect(thrown instanceof WorkflowError && thrown.cause).toBeInstanceOf(WorkflowCancelledError)
+    expect(thrown).toBeInstanceOf(SagaError)
+    expect(thrown instanceof SagaError && thrown.outcome).toBe('cancelled')
+    expect(thrown instanceof SagaError && thrown.cause).toBeInstanceOf(SagaCancelledError)
   })
 
   it('announces the cancellation as the way the run ended', async () => {

@@ -69,3 +69,16 @@ export const validateSync = <Schema extends StandardSchemaV1>(
 
   return result.value
 }
+
+/**
+ * A schema that accepts whatever it is given. Used when a definition declares no input schema —
+ * the body's own type annotation is then the only description of its input, which is a fair
+ * trade for a workflow whose caller is your own code.
+ */
+export const anything = <Value>(): StandardSchemaV1<Value, Value> => ({
+  '~standard': {
+    version: 1,
+    vendor: 'sagaflow',
+    validate: (value) => ({ value: value as Value }),
+  },
+})

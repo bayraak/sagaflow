@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { sweepAbandonedRuns } from '../src/index'
+import { sweepAbandonedRuns } from '../src/index.js'
 import { createMemoryJournal } from '../src/memory/index'
 
 const minute = 60_000

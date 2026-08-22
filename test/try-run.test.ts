@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
-import { createSagaflow, defineWorkflow, WorkflowError, type WorkflowHandle } from '../src/index'
+import { defineWorkflow } from '../src/define.js'
+import { saga, sagaflow, SagaError, type WorkflowHandle } from '../src/index.js'
 import { createMemoryJournal } from '../src/memory/index'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
@@ -77,11 +78,14 @@ describe('running a workflow without throwing', () => {
     expect(result).toMatchObject({ ok: false, runId: null, outcome: null })
   })
 
-  it('is on the façade too', async () => {
+  it('is on a saga definition too', async () => {
     const memory = createMemoryJournal()
-    const saga = createSagaflow({ journal: memory.journal })
+    const flow = sagaflow({ journal: memory.journal })
+    const write = saga('thing.write', async (input: { mark: string }, s) =>
+      s.step('write', async () => ({ written: input.mark })),
+    )
 
-    const result = await saga.for({ tenantId: 'acme' }).tryRun(succeeding, { mark: 'x' })
+    const result = await write.try({ mark: 'x' }, flow)
 
     expect(result.ok && !result.deduplicated && result.output).toEqual({ written: 'x' })
   })
@@ -96,8 +100,8 @@ describe('the error a failed run throws', () => {
       .run({ input: { mark: 'x' }, ctx: harness.ctx })
       .catch((error: unknown) => error)
 
-    expect(thrown).toBeInstanceOf(WorkflowError)
-    expect(thrown as WorkflowError).toMatchObject({
+    expect(thrown).toBeInstanceOf(SagaError)
+    expect(thrown as SagaError).toMatchObject({
       outcome: 'failed',
       stepName: 'boom',
       compensated: ['second'],

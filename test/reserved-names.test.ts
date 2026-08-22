@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 
-import { createStep, namedStep, reservedStepNames } from '../src/index'
+import { step, namedStep, reservedStepNames } from '../src/index.js'
 
-const anyStep = (name: string) =>
-  createStep<unknown, void, void>(name, { run: async () => undefined })
+const anyStep = (name: string) => step<unknown, void, void>(name, { run: async () => undefined })
 
 // The engine runs steps of its own — the finish and the drain — and names every compensation
 // after the step it reverses. A caller's step under one of those names would be handed the
@@ -18,10 +17,10 @@ describe('the names the engine keeps for itself', () => {
   })
 
   it('refuses a step borrowed under one of them', () => {
-    const step = anyStep('honest')
+    const honest = anyStep('honest')
 
     for (const reserved of Object.values(reservedStepNames)) {
-      expect(() => namedStep(step, reserved)).toThrow('reserved')
+      expect(() => namedStep(honest, reserved)).toThrow('reserved')
     }
   })
 

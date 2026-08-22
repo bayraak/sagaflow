@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
-import {
-  defineWorkflow,
-  lifecycleEventTypes,
-  WorkflowError,
-  type WorkflowHandle,
-} from '../src/index'
+import { defineWorkflow } from '../src/define.js'
+import { lifecycleEventTypes, SagaError, type WorkflowHandle } from '../src/index.js'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
 
@@ -34,8 +30,8 @@ describe('the event types the engine keeps for itself', () => {
         .run({ input: { mark: 'x' }, ctx: harness.ctx })
         .catch((error: unknown) => error)
 
-      expect(thrown).toBeInstanceOf(WorkflowError)
-      expect(((thrown as WorkflowError).cause as Error).message).toBe(
+      expect(thrown).toBeInstanceOf(SagaError)
+      expect(((thrown as SagaError).cause as Error).message).toBe(
         `"${reserved}" is emitted by the engine and cannot be emitted by a workflow`,
       )
     }
@@ -48,7 +44,7 @@ describe('the event types the engine keeps for itself', () => {
       .run({ input: { mark: 'x' }, ctx: { ...harness.ctx, eventSchemas: undefined } })
       .catch((error: unknown) => error)
 
-    expect(thrown).toBeInstanceOf(WorkflowError)
+    expect(thrown).toBeInstanceOf(SagaError)
   })
 
   it('still emits exactly one of them itself', async () => {

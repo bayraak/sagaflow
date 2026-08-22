@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { WorkflowError } from '../src/index'
+import { SagaError } from '../src/index.js'
 import { failingWorkflow } from './helpers/edges'
 import { createTestRuntime } from './helpers/runtime'
 
@@ -28,7 +28,7 @@ describe('a compensation that refuses while the saga is unwinding', () => {
       .run({ input: { mark: 'x' }, ctx })
       .catch((error: unknown) => error)
 
-    expect(thrown instanceof WorkflowError && thrown.outcome).toBe('failed')
+    expect(thrown instanceof SagaError && thrown.outcome).toBe('failed')
     expect(runs[0]?.status).toBe('failed')
     expect(finishes.map((finish) => finish.status)).toEqual(['failed'])
   })

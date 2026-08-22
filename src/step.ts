@@ -49,7 +49,7 @@ export const budgetOf = (options: StepBudget): StepRetryConfig => {
  * next thing anybody wants from a step has to have somewhere to go: a new key here is an
  * additive change, a fifth positional argument would not have been.
  */
-export const createStep = <Ctx, Input, Output>(
+export const step = <Ctx, Input, Output>(
   name: string,
   options: StepOptions<Ctx, Input, Output>,
 ): Step<Ctx, Input, Output> => {
@@ -59,7 +59,7 @@ export const createStep = <Ctx, Input, Output>(
     name,
     config: budgetOf(options),
     run: options.run,
-    compensate: options.compensate,
+    undo: options.undo,
   }
 }
 
@@ -78,11 +78,11 @@ export const createStep = <Ctx, Input, Output>(
  * already knows rather than spend a minute per item finding out again.
  */
 export const namedStep = <Ctx, Input, Output>(
-  step: Step<Ctx, Input, Output>,
+  original: Step<Ctx, Input, Output>,
   name: string,
   budget?: StepBudget,
 ): Step<Ctx, Input, Output> => {
   assertNameIsAvailable(name)
 
-  return { ...step, name, ...(budget === undefined ? {} : { config: budgetOf(budget) }) }
+  return { ...original, name, ...(budget === undefined ? {} : { config: budgetOf(budget) }) }
 }

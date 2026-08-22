@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'bun:test'
 
+import { defineWorkflow } from '../src/define.js'
 import {
-  defineWorkflow,
   executeDurable,
   namedStep,
-  WorkflowError,
+  SagaError,
   type DurableWorkflowHandle,
   type StepBudget,
   type WorkflowHandle,
-} from '../src/index'
+} from '../src/index.js'
 import { createFakePrimitive } from './helpers/primitive'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
@@ -68,7 +68,7 @@ describe('one step, used more than once in a run', () => {
       },
     )
 
-    expect(failing.run({ input: { mark: 'x' }, ctx })).rejects.toThrow(WorkflowError)
+    expect(failing.run({ input: { mark: 'x' }, ctx })).rejects.toThrow(SagaError)
     await failing.run({ input: { mark: 'y' }, ctx }).catch(() => undefined)
     expect(invocations).toContain('compensate:shared')
   })

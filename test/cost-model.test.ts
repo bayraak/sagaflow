@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'bun:test'
 
+import { defineWorkflow } from '../src/define.js'
 import {
-  defineWorkflow,
   dispatchEvents,
   executeDurable,
   type EventEnvelope,
   type RunJournal,
   type WorkflowHandle,
-} from '../src/index'
+} from '../src/index.js'
 import { createMemoryJournal, createMemorySink } from '../src/memory/index'
 import { createSqlJournal, type SqlDriver, type SqlStatement } from '../src/sql/index'
 import { createCachingPrimitive } from './helpers/primitive'

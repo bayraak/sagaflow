@@ -26,6 +26,26 @@ type RunRow = { id: string; status: string; output: string | null }
 type CancelRow = { cancel_requested: number }
 type OutboxRow = { tenant_id: string; payload: string }
 type AbandonedRow = { id: string; tenant_id: string; name: string }
+type RunDetailRow = {
+  id: string
+  name: string
+  execution: string
+  status: string
+  input: string
+  output: string | null
+  error: string | null
+  parent_run_id: string | null
+  replay_of: string | null
+  started_at: number
+  finished_at: number | null
+}
+type StepDetailRow = {
+  seq: number
+  name: string
+  status: string
+  attempt: number
+  error: string | null
+}
 
 const heldStatuses = "('running', 'completed')"
 
@@ -217,6 +237,51 @@ export const createSqlJournal = (
       })
 
       return answered.changes > 0
+    },
+
+    getRun: async (params) => {
+      const rows = await driver.all<RunDetailRow>({
+        sql: `select id, name, execution, status, input, output, error, parent_run_id, replay_of,
+                     started_at, finished_at
+              from ${tables.runs}
+              where tenant_id = ? and id = ?
+              limit 1`,
+        params: [params.tenantId, params.runId],
+      })
+
+      const run = rows[0]
+      if (!run) return null
+
+      return {
+        id: run.id,
+        name: run.name,
+        execution: run.execution,
+        status: run.status,
+        input: JSON.parse(run.input),
+        output: run.output === null ? null : JSON.parse(run.output),
+        error: run.error,
+        parentRunId: run.parent_run_id,
+        replayOf: run.replay_of,
+        startedAt: run.started_at,
+        finishedAt: run.finished_at,
+      }
+    },
+
+    listRunSteps: async (params) => {
+      const rows = await driver.all<StepDetailRow>({
+        sql: `select seq, name, status, attempt, error from ${tables.steps}
+              where tenant_id = ? and run_id = ?
+              order by seq, attempt`,
+        params: [params.tenantId, params.runId],
+      })
+
+      return rows.map((row) => ({
+        seq: row.seq,
+        name: row.name,
+        status: row.status,
+        attempt: row.attempt,
+        error: row.error,
+      }))
     },
 
     listUndispatchedEvents: async (params) => {

@@ -3,14 +3,14 @@ import { describe, expect, it } from 'bun:test'
 import * as v from 'valibot'
 import { z } from 'zod'
 
+import { defineWorkflow } from '../src/define.js'
 import {
-  defineWorkflow,
   SchemaError,
-  WorkflowError,
+  SagaError,
   type StandardSchemaV1,
   type WorkflowHandle,
   type WorkflowRuntime,
-} from '../src/index'
+} from '../src/index.js'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markStep } from './helpers/steps'
 
@@ -124,8 +124,8 @@ describe('emitting against a declared map', () => {
       .run({ input: {}, ctx })
       .catch((error: unknown) => error)
 
-    expect(thrown).toBeInstanceOf(WorkflowError)
-    expect((thrown as WorkflowError).cause).toMatchObject({
+    expect(thrown).toBeInstanceOf(SagaError)
+    expect((thrown as SagaError).cause).toMatchObject({
       message: 'no event schema is declared for "invoice.exploded"',
     })
     expect(runs[0]?.status).toBe('compensated')
@@ -181,8 +181,8 @@ describe('emitting against a declared map', () => {
       })
       .catch((error: unknown) => error)
 
-    expect((thrown as WorkflowError).cause).toBeInstanceOf(SchemaError)
-    expect(((thrown as WorkflowError).cause as SchemaError).message).toContain(
+    expect((thrown as SagaError).cause).toBeInstanceOf(SchemaError)
+    expect(((thrown as SagaError).cause as SchemaError).message).toContain(
       'validates asynchronously',
     )
   })

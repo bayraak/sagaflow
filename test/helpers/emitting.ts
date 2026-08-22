@@ -1,14 +1,15 @@
-import { createStep, defineWorkflow, type WorkflowHandle } from '../../src/index'
+import { defineWorkflow } from '../../src/define.js'
+import { step, type WorkflowHandle } from '../../src/index'
 import type { TestRuntime } from './runtime'
 import { markInput, markStep, type MarkInput, type MarkOutput } from './steps'
 
-export const emittingStep = createStep<TestRuntime, MarkInput, MarkOutput>('emitting', {
+export const emittingStep = step<TestRuntime, MarkInput, MarkOutput>('emitting', {
   run: async (input, ctx) => {
     ctx.emit('invoice.issued', { invoiceId: input.mark, total: 1 })
 
     return { seen: input.mark }
   },
-  compensate: async (_seen, ctx) => {
+  undo: async (_seen, ctx) => {
     ctx.invocations.push('compensate:emitting')
   },
 })

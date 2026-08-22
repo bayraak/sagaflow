@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'bun:test'
 
+import { defineWorkflow } from '../src/define.js'
 import {
-  defineWorkflow,
   executeDurable,
   namedStep,
-  WorkflowError,
+  SagaError,
   type DurableWorkflowHandle,
   type WorkflowHandle,
-} from '../src/index'
+} from '../src/index.js'
 import { passThroughPrimitive } from './helpers/primitive'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
@@ -33,8 +33,8 @@ describe('one step definition used twice in one run', () => {
       .run({ input: { mark: 'x' }, ctx: harness.ctx })
       .catch((error: unknown) => error)
 
-    expect(thrown).toBeInstanceOf(WorkflowError)
-    expect(((thrown as WorkflowError).cause as Error).message).toBe(
+    expect(thrown).toBeInstanceOf(SagaError)
+    expect(((thrown as SagaError).cause as Error).message).toBe(
       `step "shared" was already used in this run — wrap it with namedStep(step, "shared-2")`,
     )
   })
@@ -58,8 +58,8 @@ describe('one step definition used twice in one run', () => {
       passThroughPrimitive(),
     ).catch((error: unknown) => error)
 
-    expect(thrown).toBeInstanceOf(WorkflowError)
-    expect(((thrown as WorkflowError).cause as Error).message).toContain('already used in this run')
+    expect(thrown).toBeInstanceOf(SagaError)
+    expect(((thrown as SagaError).cause as Error).message).toContain('already used in this run')
   })
 
   it('undoes what the first use had already done', async () => {

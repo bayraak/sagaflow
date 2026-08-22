@@ -192,6 +192,33 @@ export type RunJournal = {
     startedBefore: number
     limit: number
   }) => Promise<{ tenantId: string; runId: string; name: string }[]>
+  /**
+   * The run itself, for whoever is asking what happened.
+   *
+   * Optional, and feature-detected: a journal written before this existed keeps working, and the
+   * one thing it cannot do — `flow.inspect` and `flow.replay` — says so plainly rather than
+   * failing somewhere further in.
+   */
+  getRun?(params: { tenantId: string; runId: string }): Promise<{
+    id: string
+    name: string
+    execution: string
+    status: string
+    input: unknown
+    output: unknown
+    error: string | null
+    parentRunId: string | null
+    replayOf: string | null
+    startedAt: number
+    finishedAt: number | null
+  } | null>
+  /** The run's trail, oldest first. Optional, like `getRun`. */
+  listRunSteps?(params: {
+    tenantId: string
+    runId: string
+  }): Promise<
+    { seq: number; name: string; status: string; attempt: number; error: string | null }[]
+  >
   /** Held runs only, by the same rule `insertRun` refuses by. */
   findRunByIdempotencyKey: (params: {
     tenantId: string
@@ -265,6 +292,8 @@ export type WorkflowRuntime<Events extends EventSchemaMap = EventSchemaMap> = {
   events?: EventSink
   eventSchemas?: Events
   observer?: RunObserver
+  /** Whatever the caller scoped this request with, beyond the tenant and the actor. */
+  ctx?: unknown
 }
 
 export type EventsOf<Ctx> = Ctx extends { eventSchemas?: infer Events }
@@ -300,7 +329,7 @@ export type StepContext<Ctx> = Ctx & {
 
 /** Why a compensation is running. */
 export type CompensationReason = {
-  /** The error that unwound the run. A `WorkflowCancelledError` when somebody asked it to stop. */
+  /** The error that unwound the run. A `SagaCancelledError` when somebody asked it to stop. */
   cause: unknown
 }
 
@@ -326,12 +355,12 @@ export type Step<Ctx, Input, Output> = {
   name: string
   config: StepRetryConfig
   run(input: Input, ctx: StepContext<Ctx>): Promise<Output>
-  compensate?(output: Output, ctx: StepContext<Ctx>, reason: CompensationReason): Promise<void>
+  undo?(output: Output, ctx: StepContext<Ctx>, reason: CompensationReason): Promise<void>
 }
 
 /** Everything a step declared inline may say about itself beyond its name and its work. */
 export type InlineStepOptions<Ctx, Output> = StepBudget & {
-  compensate?(output: Output, ctx: StepContext<Ctx>, reason: CompensationReason): Promise<void>
+  undo?(output: Output, ctx: StepContext<Ctx>, reason: CompensationReason): Promise<void>
 }
 
 /** Everything a reusable step is, apart from its name. */
@@ -342,8 +371,11 @@ export type StepOptions<Ctx, Input, Output> = StepBudget & {
    * How to undo it, given exactly what `run` returned — and why it is being undone, because a
    * refund note that says "the customer changed their mind" reads differently from one that
    * says "the warehouse fell over".
+   *
+   * The word is `undo` throughout the API. The run record still says `compensated`, because
+   * that is what the literature and the status column call it.
    */
-  compensate?(output: Output, ctx: StepContext<Ctx>, reason: CompensationReason): Promise<void>
+  undo?(output: Output, ctx: StepContext<Ctx>, reason: CompensationReason): Promise<void>
 }
 
 /**
@@ -354,6 +386,9 @@ export type StepOptions<Ctx, Input, Output> = StepBudget & {
 export type StepCall<Output> = PromiseLike<Output>
 
 export type WorkflowHandle<Ctx> = {
+  /** The runtime this run is executing under. */
+  runtime: Ctx
+  runId: string
   /** A step declared elsewhere and reused, handed its input. */
   step<Input, Output>(step: Step<Ctx, Input, Output>, input: Input): StepCall<Output>
   /**

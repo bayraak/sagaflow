@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'bun:test'
 
+import { defineWorkflow } from '../src/define.js'
 import {
-  createStep,
-  defineWorkflow,
+  step,
   executeDurable,
-  WorkflowError,
+  SagaError,
   type DurableWorkflowHandle,
   type StepContext,
   type WorkflowHandle,
-} from '../src/index'
+} from '../src/index.js'
 import { createFakePrimitive } from './helpers/primitive'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
@@ -45,7 +45,7 @@ describe('a step declared where it is used', () => {
 
     await workflow.run({ input: { mark: 'x' }, ctx: harness.ctx })
 
-    expect(harness.steps.map((step) => [step.seq, step.name, step.status])).toEqual([
+    expect(harness.steps.map((row) => [row.seq, row.name, row.status])).toEqual([
       [0, 'one', 'completed'],
       [1, 'two', 'completed'],
     ])
@@ -78,7 +78,7 @@ describe('a step declared where it is used', () => {
       { name: 'test.inline-undo', input: markInput, execution: 'durable' },
       async (input: { mark: string }, wf: DurableWorkflowHandle<TestRuntime>) => {
         await wf.step('charge', async () => ({ chargeId: `ch-${input.mark}` }), {
-          compensate: async (charged) => {
+          undo: async (charged) => {
             undone.push(charged)
           },
           retries: { limit: 1, delay: '1 second' },
@@ -114,7 +114,7 @@ describe('a step declared where it is used', () => {
       .run({ input: { mark: 'x' }, ctx: harness.ctx })
       .catch((error: unknown) => error)
 
-    expect(((thrown as WorkflowError).cause as Error).message).toContain('reserved')
+    expect(((thrown as SagaError).cause as Error).message).toContain('reserved')
   })
 
   it('obeys the one-name-per-run rule', async () => {
@@ -132,7 +132,7 @@ describe('a step declared where it is used', () => {
       .run({ input: { mark: 'x' }, ctx: harness.ctx })
       .catch((error: unknown) => error)
 
-    expect(((thrown as WorkflowError).cause as Error).message).toContain('already used in this run')
+    expect(((thrown as SagaError).cause as Error).message).toContain('already used in this run')
   })
 })
 
@@ -148,7 +148,7 @@ describe('what a compensation is handed', () => {
       { name: 'test.undo-inline', input: markInput, execution: 'inline' },
       async (input: { mark: string }, wf: WorkflowHandle<TestRuntime>) => {
         await wf.step('reserve', async () => ({ number: 41, ledger: 'main' }), {
-          compensate: async (reserved) => {
+          undo: async (reserved) => {
             undone.push(reserved)
           },
         })
@@ -165,9 +165,9 @@ describe('what a compensation is handed', () => {
     const harness = createTestRuntime()
     const undone: unknown[] = []
 
-    const reserve = createStep('reserve', {
+    const reserve = step('reserve', {
       run: async (input: { mark: string }) => ({ number: 41, mark: input.mark }),
-      compensate: async (reserved: { number: number; mark: string }) => {
+      undo: async (reserved: { number: number; mark: string }) => {
         undone.push(reserved)
       },
     })
@@ -196,7 +196,7 @@ describe('what a compensation is handed', () => {
       { name: 'test.undo-receipt', input: markInput, execution: 'inline' },
       async (input: { mark: string }, wf: WorkflowHandle<TestRuntime>) => {
         const receipt = await wf.step('charge', async () => ({ chargeId: `ch-${input.mark}` }), {
-          compensate: async (charged) => {
+          undo: async (charged) => {
             undone.push(charged)
           },
         })
@@ -225,7 +225,7 @@ describe('what a compensation is handed', () => {
 
     await workflow.run({ input: { mark: 'x' }, ctx: harness.ctx }).catch(() => undefined)
 
-    expect(harness.steps.map((step) => step.name)).toEqual(['write', 'boom'])
+    expect(harness.steps.map((row) => row.name)).toEqual(['write', 'boom'])
   })
 
   it('is told why, inline as well', async () => {
@@ -236,7 +236,7 @@ describe('what a compensation is handed', () => {
       { name: 'test.undo-inline-cause', input: markInput, execution: 'inline' },
       async (input: { mark: string }, wf: WorkflowHandle<TestRuntime>) => {
         await wf.step('reserve', async () => 1, {
-          compensate: async (_value: number, _ctx: StepContext<TestRuntime>, why) => {
+          undo: async (_value: number, _ctx: StepContext<TestRuntime>, why) => {
             causes.push((why.cause as Error).message)
           },
         })

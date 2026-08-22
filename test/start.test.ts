@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
-import {
-  defineWorkflow,
-  instanceIdFor,
-  startDurableWorkflow,
-  type DurableWorkflowHandle,
-} from '../src/index'
+import { defineWorkflow } from '../src/define.js'
+import { instanceIdFor, startDurableWorkflow, type DurableWorkflowHandle } from '../src/index.js'
 import { createLauncher } from './helpers/launcher'
 import { createTestRuntime, firstRun, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'

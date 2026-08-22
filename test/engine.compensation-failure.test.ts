@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { WorkflowError } from '../src/index'
+import { SagaError } from '../src/index.js'
 import { createTestRuntime, firstRun } from './helpers/runtime'
 import { threeStepWorkflow } from './helpers/workflows'
 
@@ -42,6 +42,6 @@ describe('a compensation that itself fails does not stop the others', () => {
       .catch((error: unknown) => error)
 
     expect(firstRun(runs).status).toBe('failed')
-    expect(thrown instanceof WorkflowError && thrown.outcome).toBe('failed')
+    expect(thrown instanceof SagaError && thrown.outcome).toBe('failed')
   })
 })

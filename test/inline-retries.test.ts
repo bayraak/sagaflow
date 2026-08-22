@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
-import { createStep, defineWorkflow, type WorkflowHandle } from '../src/index'
+import { defineWorkflow } from '../src/define.js'
+import { step, type WorkflowHandle } from '../src/index.js'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput } from './helpers/steps'
 
@@ -12,7 +13,7 @@ describe('an inline step that asked to be retried', () => {
     const harness = createTestRuntime()
     const attempts: number[] = []
 
-    const flaky = createStep<TestRuntime, { mark: string }, string>('flaky', {
+    const flaky = step<TestRuntime, { mark: string }, string>('flaky', {
       run: async (_input, ctx) => {
         attempts.push(ctx.attempt)
         if (ctx.attempt < 3) throw new Error('not yet')
@@ -31,7 +32,7 @@ describe('an inline step that asked to be retried', () => {
 
     expect(attempts).toEqual([1, 2, 3])
     expect(!result.deduplicated && result.output).toBe('eventually')
-    expect(harness.steps.map((step) => [step.attempt, step.status])).toEqual([
+    expect(harness.steps.map((row) => [row.attempt, row.status])).toEqual([
       [1, 'failed'],
       [2, 'failed'],
       [3, 'completed'],
@@ -42,7 +43,7 @@ describe('an inline step that asked to be retried', () => {
     const harness = createTestRuntime()
     let seen = 0
 
-    const hopeless = createStep<TestRuntime, { mark: string }, string>('hopeless', {
+    const hopeless = step<TestRuntime, { mark: string }, string>('hopeless', {
       run: async () => {
         seen += 1
 

@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'bun:test'
 
+import { defineWorkflow } from '../src/define.js'
 import {
-  createStep,
-  defineWorkflow,
+  step,
   executeDurable,
   requestCancellation,
-  WorkflowCancelledError,
+  SagaCancelledError,
   type DurableWorkflowHandle,
   type StepCall,
   type StepContext,
   type WorkflowHandle,
-} from '../src/index'
+} from '../src/index.js'
 import { createRetryingPrimitive } from './helpers/primitive'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
@@ -23,7 +23,7 @@ describe('a step knows which attempt it is on', () => {
     const harness = createTestRuntime()
     const seen: number[] = []
 
-    const counting = createStep('count', {
+    const counting = step('count', {
       run: async (_input: { mark: string }, ctx: StepContext<TestRuntime>) => {
         seen.push(ctx.attempt)
       },
@@ -43,7 +43,7 @@ describe('a step knows which attempt it is on', () => {
     const harness = createTestRuntime()
     const seen: number[] = []
 
-    const flaky = createStep('flaky', {
+    const flaky = step('flaky', {
       run: async (_input: { mark: string }, ctx: StepContext<TestRuntime>) => {
         seen.push(ctx.attempt)
         if (ctx.attempt < 3) throw new Error('not yet')
@@ -72,7 +72,7 @@ describe('a step knows which attempt it is on', () => {
     const harness = createTestRuntime()
     const keys: string[] = []
 
-    const flaky = createStep('flaky-key', {
+    const flaky = step('flaky-key', {
       run: async (_input: { mark: string }, ctx: StepContext<TestRuntime>) => {
         keys.push(ctx.idempotencyKey)
         if (ctx.attempt < 2) throw new Error('not yet')
@@ -105,9 +105,9 @@ describe('a compensation is told why it is running', () => {
     const harness = createTestRuntime()
     const causes: string[] = []
 
-    const undoable = createStep('undoable', {
+    const undoable = step('undoable', {
       run: async (input: { mark: string }) => ({ seen: input.mark }),
-      compensate: async (_seen: { seen: string }, _ctx: StepContext<TestRuntime>, why) => {
+      undo: async (_seen: { seen: string }, _ctx: StepContext<TestRuntime>, why) => {
         causes.push((why.cause as Error).message)
       },
     })
@@ -129,7 +129,7 @@ describe('a compensation is told why it is running', () => {
     const harness = createTestRuntime()
     const causes: unknown[] = []
 
-    const undoable = createStep('undoable', {
+    const undoable = step('undoable', {
       run: async (input: { mark: string }, ctx: StepContext<TestRuntime>) => {
         await requestCancellation({
           journal: ctx.journal,
@@ -139,7 +139,7 @@ describe('a compensation is told why it is running', () => {
 
         return { seen: input.mark }
       },
-      compensate: async (_seen: { seen: string }, _ctx: StepContext<TestRuntime>, why) => {
+      undo: async (_seen: { seen: string }, _ctx: StepContext<TestRuntime>, why) => {
         causes.push(why.cause)
       },
     })
@@ -153,16 +153,16 @@ describe('a compensation is told why it is running', () => {
 
     await workflow.run({ input: { mark: 'x' }, ctx: harness.ctx }).catch(() => undefined)
 
-    expect(causes[0]).toBeInstanceOf(WorkflowCancelledError)
+    expect(causes[0]).toBeInstanceOf(SagaCancelledError)
   })
 
   it('knows which attempt of the undo it is on', async () => {
     const harness = createTestRuntime()
     const attempts: number[] = []
 
-    const undoable = createStep('undoable', {
+    const undoable = step('undoable', {
       run: async (input: { mark: string }) => ({ seen: input.mark }),
-      compensate: async (_seen: { seen: string }, ctx: StepContext<TestRuntime>) => {
+      undo: async (_seen: { seen: string }, ctx: StepContext<TestRuntime>) => {
         attempts.push(ctx.attempt)
         if (ctx.attempt < 2) throw new Error('the undo is flaky too')
       },

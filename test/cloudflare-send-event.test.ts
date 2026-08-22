@@ -5,8 +5,9 @@ import {
   type WorkflowInstanceHandle,
   type WorkflowInstanceLookup,
 } from '../src/cloudflare/send-event'
-import { defineWorkflow, instanceIdFor, startDurableWorkflow } from '../src/index'
-import type { DurableWorkflowHandle } from '../src/index'
+import { defineWorkflow } from '../src/define.js'
+import { instanceIdFor, startDurableWorkflow } from '../src/index.js'
+import type { DurableWorkflowHandle } from '../src/index.js'
 import { createLauncher } from './helpers/launcher'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'

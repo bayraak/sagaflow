@@ -6,13 +6,13 @@ import type { RunJournal } from './types.js'
  * failure: the run is unwound exactly as a failure would be, but it closes `cancelled` and
  * says so, because "somebody changed their mind" and "something broke" are different facts.
  */
-export class WorkflowCancelledError extends SagaflowError {
+export class SagaCancelledError extends SagaflowError {
   readonly runId: string
 
   constructor(runId: string) {
     super(`run ${runId} was asked to stop`)
 
-    this.name = 'WorkflowCancelledError'
+    this.name = 'SagaCancelledError'
     this.runId = runId
   }
 }

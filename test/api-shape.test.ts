@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'bun:test'
 
+import { defineWorkflow } from '../src/define.js'
 import {
-  createStep,
+  step,
   defaultStepConfig,
-  defineWorkflow,
   requestCancellation,
   SagaflowError,
   SchemaError,
-  WorkflowCancelledError,
-  WorkflowError,
+  SagaCancelledError,
+  SagaError,
   type StepContext,
   type WorkflowHandle,
-} from '../src/index'
+} from '../src/index.js'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
 
@@ -22,13 +22,13 @@ describe('a step is a name and a bag of options', () => {
   it('takes its work, its undo and its budget as keys', async () => {
     const harness = createTestRuntime()
 
-    const reserve = createStep('reserve', {
+    const reserve = step('reserve', {
       run: async (input: { mark: string }, ctx: StepContext<TestRuntime>) => {
         ctx.invocations.push('invoke:reserve')
 
         return { seen: input.mark }
       },
-      compensate: async (_seen: { seen: string }, ctx: StepContext<TestRuntime>) => {
+      undo: async (_seen: { seen: string }, ctx: StepContext<TestRuntime>) => {
         ctx.invocations.push('compensate:reserve')
       },
       retries: { limit: 1, delay: '1 second' },
@@ -51,19 +51,19 @@ describe('a step is a name and a bag of options', () => {
   })
 
   it('spends the default budget when it names none', () => {
-    const step = createStep('plain', { run: async () => 1 })
+    const plain = step('plain', { run: async () => 1 })
 
-    expect(step.config).toEqual(defaultStepConfig)
+    expect(plain.config).toEqual(defaultStepConfig)
   })
 
   it('spends only what it named when it names one', () => {
-    const step = createStep('impatient', { run: async () => 1, timeout: '5 seconds' })
+    const impatient = step('impatient', { run: async () => 1, timeout: '5 seconds' })
 
-    expect(step.config).toEqual({ timeout: '5 seconds' })
+    expect(impatient.config).toEqual({ timeout: '5 seconds' })
   })
 
   it('refuses a reserved name', () => {
-    expect(() => createStep('finish-run', { run: async () => 1 })).toThrow('reserved')
+    expect(() => step('finish-run', { run: async () => 1 })).toThrow('reserved')
   })
 })
 
@@ -101,14 +101,14 @@ describe('everything this library throws shares an ancestor', () => {
       .run({ input: { mark: 'x' }, ctx: harness.ctx })
       .catch((error: unknown) => error)
 
-    expect(thrown).toBeInstanceOf(WorkflowError)
+    expect(thrown).toBeInstanceOf(SagaError)
     expect(thrown).toBeInstanceOf(SagaflowError)
   })
 
   it('covers a cancellation', async () => {
     const harness = createTestRuntime()
 
-    const cancelling = createStep('cancel-me', {
+    const cancelling = step('cancel-me', {
       run: async (input: { mark: string }, ctx: StepContext<TestRuntime>) => {
         await requestCancellation({
           journal: ctx.journal,
@@ -130,7 +130,7 @@ describe('everything this library throws shares an ancestor', () => {
       .run({ input: { mark: 'x' }, ctx: harness.ctx })
       .catch((error: unknown) => error)
 
-    expect((thrown as WorkflowError).cause).toBeInstanceOf(WorkflowCancelledError)
-    expect((thrown as WorkflowError).cause).toBeInstanceOf(SagaflowError)
+    expect((thrown as SagaError).cause).toBeInstanceOf(SagaCancelledError)
+    expect((thrown as SagaError).cause).toBeInstanceOf(SagaflowError)
   })
 })

@@ -1,8 +1,8 @@
 import { z } from 'zod'
 
+import { defineWorkflow } from '../src/define.js'
 import {
-  createStep,
-  defineWorkflow,
+  step,
   type DurableWorkflowHandle,
   type EventSink,
   type StepContext,
@@ -22,7 +22,7 @@ const thingInput = z.object({ mark: z.string().min(1) })
 
 // A step with a real database effect and a real undo, so the D1 journal is exercised by a
 // workflow rather than by a suite poking at it directly.
-const writeThing = createStep('write-thing', {
+const writeThing = step('write-thing', {
   run: async (input: { mark: string }, ctx: StepContext<TestRuntime>) => {
     await ctx.db
       .prepare('insert into things (id, tenant_id, mark) values (?, ?, ?)')
@@ -31,12 +31,12 @@ const writeThing = createStep('write-thing', {
 
     return { id: ctx.idempotencyKey }
   },
-  compensate: async (written: { id: string }, ctx: StepContext<TestRuntime>) => {
+  undo: async (written: { id: string }, ctx: StepContext<TestRuntime>) => {
     await ctx.db.prepare('delete from things where id = ?').bind(written.id).run()
   },
 })
 
-const refuse = createStep('refuse', {
+const refuse = step('refuse', {
   run: async (): Promise<never> => {
     throw new Error('this step always refuses')
   },

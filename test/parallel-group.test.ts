@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
-import { defineWorkflow, WorkflowError, type WorkflowHandle } from '../src/index'
+import { defineWorkflow } from '../src/define.js'
+import { SagaError, type WorkflowHandle } from '../src/index.js'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
 
@@ -89,8 +90,8 @@ describe('a named parallel group', () => {
       .run({ input: { mark: 'x' }, ctx: harness.ctx })
       .catch((error: unknown) => error)
 
-    expect(thrown).toBeInstanceOf(WorkflowError)
-    expect(((thrown as WorkflowError).cause as Error).message).toBe('fast refused')
+    expect(thrown).toBeInstanceOf(SagaError)
+    expect(((thrown as SagaError).cause as Error).message).toBe('fast refused')
     // The slow one was not abandoned mid-flight when its neighbour fell over.
     expect(finished).toEqual(['fast', 'slow'])
   })
@@ -105,13 +106,13 @@ describe('a named parallel group', () => {
         await wf.all('fan-out', [
           () =>
             wf.step('a', async () => 'a', {
-              compensate: async () => {
+              undo: async () => {
                 undone.push('a')
               },
             }),
           () =>
             wf.step('b', async () => 'b', {
-              compensate: async () => {
+              undo: async () => {
                 undone.push('b')
               },
             }),

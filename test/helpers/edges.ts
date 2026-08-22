@@ -1,4 +1,5 @@
-import { createStep, defineWorkflow, type WorkflowHandle } from '../../src/index'
+import { defineWorkflow } from '../../src/define.js'
+import { step, type WorkflowHandle } from '../../src/index'
 import type { TestRuntime } from './runtime'
 import { markInput, type MarkInput, type MarkOutput } from './steps'
 
@@ -6,14 +7,14 @@ const edgeStep = (
   name: string,
   options: { compensateFails?: boolean; emitsWhileUndoing?: boolean; fails?: boolean } = {},
 ) =>
-  createStep<TestRuntime, MarkInput, MarkOutput>(name, {
+  step<TestRuntime, MarkInput, MarkOutput>(name, {
     run: async (input, ctx) => {
       ctx.invocations.push(`invoke:${name}`)
       if (options.fails) throw new Error(`${name} refused`)
 
       return { seen: `${name}:${input.mark}` }
     },
-    compensate: async (_seen, ctx) => {
+    undo: async (_seen, ctx) => {
       ctx.invocations.push(`compensate:${name}`)
       if (options.emitsWhileUndoing) {
         ctx.emit('invoice.issued', { invoiceId: `undone-${name}`, total: 0 })

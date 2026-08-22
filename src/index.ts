@@ -1,19 +1,24 @@
-export {
-  defineWorkflow,
-  type AnyWorkflow,
-  type DurableWorkflow,
-  type InlineWorkflow,
-} from './define.js'
-export { requestCancellation, WorkflowCancelledError } from './cancel.js'
+export type { AnyWorkflow, DurableWorkflow, InlineWorkflow } from './define.js'
+export { requestCancellation, SagaCancelledError } from './cancel.js'
 export { millisecondsOf } from './duration.js'
 export { createInlineRunner } from './retry.js'
 export { claimRun, type RunClaim } from './claim.js'
 export { compensationIdempotencyKey, envelopeId, stepIdempotencyKey } from './identity.js'
 export { canonicalise, stableHash } from './canonical.js'
 export { executeDurable } from './durable.js'
-export { createSagaflow, type Sagaflow, type SagaflowConfig, type SagaflowScope } from './facade.js'
+export { sagaflow, type Flow, type RunReport, type SagaflowConfig } from './flow.js'
+export {
+  saga,
+  type AnySaga,
+  type DurableSaga,
+  type DurableSagaHandle,
+  type InlineSaga,
+  type SagaHandle,
+  type StepDeclaration,
+  type StepRunContext,
+} from './saga.js'
 export { executeRun, type StepRunner } from './engine.js'
-export { IdempotencyKeyHeldError, messageOf, SagaflowError, WorkflowError } from './errors.js'
+export { IdempotencyKeyHeldError, messageOf, SagaflowError, SagaError } from './errors.js'
 export { lifecycleEvents, lifecycleEventTypes } from './events.js'
 export {
   dispatchEvents,
@@ -27,13 +32,13 @@ export {
   registerDurableWorkflow,
   type RegisteredWorkflow,
 } from './registry.js'
-export { SchemaError } from './schema.js'
+export { anything, SchemaError } from './schema.js'
 export {
   compensationStepName,
-  createStep,
   defaultStepConfig,
   namedStep,
   reservedStepNames,
+  step,
 } from './step.js'
 export { abandonedSweepLimit, sweepAbandonedRuns } from './sweep.js'
 export { instanceIdFor, startDurableWorkflow } from './start.js'

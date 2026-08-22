@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
-import { defineWorkflow, type RunObserver, type WorkflowHandle } from '../src/index'
+import { defineWorkflow } from '../src/define.js'
+import { type RunObserver, type WorkflowHandle } from '../src/index.js'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
 

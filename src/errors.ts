@@ -37,7 +37,7 @@ const describeFailure = (params: {
  * What a failed run throws. It carries the run id because the run record — not the stack — is
  * where the failure is explained: input, step trail, compensation trail, timings.
  */
-export class WorkflowError extends SagaflowError {
+export class SagaError extends SagaflowError {
   readonly runId: string
   readonly workflowName: string
   readonly stepName: string | null
@@ -58,7 +58,7 @@ export class WorkflowError extends SagaflowError {
   }) {
     super(describeFailure(params), { cause: params.cause })
 
-    this.name = 'WorkflowError'
+    this.name = 'SagaError'
     this.runId = params.runId
     this.workflowName = params.workflowName
     this.stepName = params.stepName
