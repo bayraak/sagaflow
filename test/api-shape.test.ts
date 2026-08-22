@@ -3,10 +3,10 @@ import { describe, expect, it } from 'bun:test'
 import { defineWorkflow } from '../src/define.js'
 import {
   defaultStepConfig,
+  SagaCancelledError,
   requestCancellation,
   SagaflowError,
   SchemaError,
-  SagaCancelledError,
   SagaError,
   type StepContext,
   type WorkflowHandle,
@@ -132,5 +132,54 @@ describe('everything this library throws shares an ancestor', () => {
 
     expect((thrown as SagaError).cause).toBeInstanceOf(SagaCancelledError)
     expect((thrown as SagaError).cause).toBeInstanceOf(SagaflowError)
+  })
+})
+
+// A literal tag beside the name, so these slot into tagged-union error handling — the shape
+// Result libraries and Effect codebases already switch on — without an adapter between.
+describe('the errors carry a tag', () => {
+  it('tags a failed run', async () => {
+    const harness = createTestRuntime()
+
+    const workflow = defineWorkflow(
+      { name: 'test.tagged', input: markInput, execution: 'inline' },
+      async (input: { mark: string }, wf: WorkflowHandle<TestRuntime>) =>
+        wf.step(markStep('a', { fails: true }), input),
+    )
+
+    const thrown = await workflow
+      .run({ input: { mark: 'x' }, ctx: harness.ctx })
+      .catch((error: unknown) => error)
+
+    expect((thrown as SagaError)._tag).toBe('SagaError')
+    expect((thrown as SagaError).name).toBe('SagaError')
+  })
+
+  it('tags a cancellation', async () => {
+    const harness = createTestRuntime()
+
+    const cancelling = defineStep<TestRuntime, { mark: string }, { seen: string }>('cancel-me', {
+      run: async (input, stepContext) => {
+        await requestCancellation({
+          journal: stepContext.journal,
+          tenantId: stepContext.tenantId,
+          runId: stepContext.runId,
+        })
+
+        return { seen: input.mark }
+      },
+    })
+
+    const workflow = defineWorkflow(
+      { name: 'test.tagged-cancel', input: markInput, execution: 'inline' },
+      async (input: { mark: string }, wf: WorkflowHandle<TestRuntime>) =>
+        wf.step(cancelling, input),
+    )
+
+    const thrown = await workflow
+      .run({ input: { mark: 'x' }, ctx: harness.ctx })
+      .catch((error: unknown) => error)
+
+    expect(((thrown as SagaError).cause as SagaCancelledError)._tag).toBe('SagaCancelledError')
   })
 })

@@ -38,6 +38,11 @@ const describeFailure = (params: {
  * where the failure is explained: input, step trail, compensation trail, timings.
  */
 export class SagaError extends SagaflowError {
+  /**
+   * A literal tag beside `name`, so this slots into tagged-union error handling — the shape
+   * Result libraries and Effect codebases already switch on — without an adapter.
+   */
+  readonly _tag = 'SagaError' as const
   readonly runId: string
   readonly workflowName: string
   readonly failedStep: string | null

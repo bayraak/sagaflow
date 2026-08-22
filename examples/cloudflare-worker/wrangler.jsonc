@@ -1,0 +1,29 @@
+{
+  // Every binding sagaflow needs, and nothing else. Run scripts/setup.sh to create the
+  // resources and paste the ids it prints in here.
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "sagaflow-example",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-15",
+  // Required: the ambient verbs use AsyncLocalStorage.
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sagaflow-example",
+      "database_id": "00000000-0000-0000-0000-0000000000ex",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "workflows": [
+    { "name": "sagaflow-example-sagas", "binding": "WORKFLOWS", "class_name": "Sagas" },
+  ],
+  "queues": {
+    "producers": [{ "binding": "EVENTS", "queue": "sagaflow-example-events" }],
+    "consumers": [{ "queue": "sagaflow-example-events", "max_batch_size": 10, "max_retries": 3 }],
+  },
+  // Every five minutes: carry the events a run's own drain could not deliver, and close inline
+  // runs whose isolate died. Both are idempotent.
+  "triggers": { "crons": ["*/5 * * * *"] },
+  // Named environments inherit NOTHING. Repeat every block above in each "env" you deploy.
+}

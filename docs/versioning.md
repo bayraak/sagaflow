@@ -9,7 +9,7 @@ state, so none of this applies to them: change them freely.
 > middle or removing one all break in-flight instances.
 
 A durable platform memoises step results **by name**. When an instance is re-invoked, the body
-runs again from the top and each `wf.step` call is answered from the journal by the name it asks
+runs again from the top and each `step()` call is answered from the journal by the name it asks
 for. Change the names, or the order they are asked in, and a replaying instance is handed the
 wrong result — or none, and re-executes work it already did.
 
@@ -21,9 +21,10 @@ and they break by doing the wrong thing quietly.
 Version by name and let the old one drain:
 
 ```ts
-export const sendInvoiceV2 = defineWorkflow(
-  { name: 'invoice.send.v2', input: invoiceSendInput, execution: 'durable' },
-  async (input, wf) => {
+export const sendInvoiceV2 = saga(
+  'invoice.send.v2',
+  { input: invoiceSendInput, durable: true },
+  async (input) => {
     /* the new shape */
   },
 )
@@ -61,17 +62,20 @@ letting it happen quietly:
 
 ```ts
 for (const recipient of recipients) {
-  await wf.step(namedStep(sendDigest, `send-${recipient.id}`), recipient)
+  await sendDigest(recipient) // send-digest, send-digest#2, send-digest#3 …
 }
 ```
 
-The same rule, from the same cause. Fan-out needs a name per item, and the name has to be stable
-across replays — derive it from the data, never from a loop counter over an unordered collection.
+The engine numbers repeated names in **call order**, which is deterministic for a deterministic
+body and therefore identical on a replay, so the obvious loop is correct. Where the name is worth
+reading in the trail, give each one an explicit name — and derive it from the data, never from a
+loop counter over an unordered collection, because a set iterated in a different order would
+produce a different journal.
 
 ## The names the engine keeps
 
-`finish-run`, `emit-events`, and anything starting `compensate:`. `createStep` and `namedStep`
-refuse them at definition time. Two event names are reserved the same way:
+`finish-run`, `emit-events`, and anything starting `compensate:`. `step()` and `action()` refuse
+them at definition time. Two event names are reserved the same way:
 `workflow.completed` and `workflow.compensated`.
 
 ## Changing the schema of your tables

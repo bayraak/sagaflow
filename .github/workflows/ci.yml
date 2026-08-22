@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - run: bun install --frozen-lockfile
+
+      - name: Types
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Format
+        run: bun run fmt:check
+
+      # The core: in-memory adapters, no platform, no network.
+      - name: Test
+        run: bun test
+
+      # The examples are executed, not merely type-checked.
+      - name: Test the examples
+        run: bun run test:examples
+
+      # Real workerd, real local D1, a real Workflows binding, a real Queue. No network: the
+      # config declares no remote-only binding, so the pool has nothing to phone home about.
+      - name: Test on workerd
+        run: bun run test:workerd
+
+      - name: Test the Cloudflare example on workerd
+        run: bun run test:example-worker
+
+      - name: Build
+        run: bun run build
+
+      # The tarball must contain the built package and the four documents, and nothing else.
+      - name: Check what would be published
+        run: |
+          npm pack --dry-run --json > pack.json
+          node --input-type=module -e "
+            import { readFileSync } from 'node:fs'
+            const [{ files }] = JSON.parse(readFileSync('pack.json', 'utf8'))
+            const allowed = /^(dist\/|README\.md$|SKILL\.md$|LICENSE$|CHANGELOG\.md$|package\.json$)/
+            const unexpected = files.map((file) => file.path).filter((path) => !allowed.test(path))
+            if (unexpected.length > 0) {
+              console.error('unexpected files in the tarball:', unexpected)
+              process.exit(1)
+            }
+            console.log('tarball contains', files.length, 'files, all expected')
+          "
+
+      # Zero runtime dependencies is a constraint on the design, not an aspiration.
+      - name: Check there are no runtime dependencies
+        run: |
+          node --input-type=module -e "
+            import { readFileSync } from 'node:fs'
+            const manifest = JSON.parse(readFileSync('package.json', 'utf8'))
+            const dependencies = Object.keys(manifest.dependencies ?? {})
+            if (dependencies.length > 0) {
+              console.error('sagaflow has runtime dependencies:', dependencies)
+              process.exit(1)
+            }
+            console.log('no runtime dependencies')
+          "

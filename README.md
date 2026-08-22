@@ -391,6 +391,10 @@ decision to make. `try` answers with `{ ok: true, value, runId, deduplicated }` 
 wrapping it in yours is one line and depending on any of them is nobody's problem but yours. The
 plain call throws the same `SagaError`.
 
+**Interoperable with Result libraries by shape — no dependency.** `SagaError` and
+`SagaCancelledError` also carry a literal `_tag`, so they slot straight into tagged-union error
+handling.
+
 ## The same request, twice
 
 ```ts

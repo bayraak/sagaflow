@@ -7,6 +7,8 @@ import type { RunJournal } from './types.js'
  * says so, because "somebody changed their mind" and "something broke" are different facts.
  */
 export class SagaCancelledError extends SagaflowError {
+  /** A literal tag beside `name`, for tagged-union error handling. */
+  readonly _tag = 'SagaCancelledError' as const
   readonly runId: string
 
   constructor(runId: string) {

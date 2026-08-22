@@ -1,0 +1,10 @@
+{
+  "name": "sagaflow-example-cloudflare-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "vitest run",
+    "deploy": "wrangler deploy"
+  }
+}

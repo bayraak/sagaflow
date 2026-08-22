@@ -68,10 +68,12 @@
     "build": "tsc -p tsconfig.build.json && cp src/sql/schema.sql dist/sql/schema.sql",
     "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check .",
-    "lint": "oxlint src test test-workerd",
+    "lint": "oxlint src test test-workerd examples",
     "test": "bun test",
+    "test:examples": "bun test --cwd examples",
     "test:workerd": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "test:example-worker": "vitest run --root examples/cloudflare-worker",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.examples.json --noEmit"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",

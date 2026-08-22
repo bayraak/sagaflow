@@ -29,14 +29,16 @@ cannot finish now should compensate and say so rather than spend the budget.
 ## Why compensation is registered from the return value
 
 ```ts
-const step = createStep('reserve', {
-  run: async (input) => {
-    const number = await reserve(input)
-
-    return { output: number, compensateWith: number } // <- this
-  },
-  compensate: async (number) => release(number), // <- gets this
+const reserveNumber = action(reserve, {
+  undo: (number) => release(number), // <- gets exactly what `reserve` returned
 })
+
+// or inline, for work with no home of its own:
+const number = await step(
+  'reserve',
+  () => reserve(input),
+  (reserved) => release(reserved),
+)
 ```
 
 The obvious alternative is a closure: `run` captures `number` and the undo reads it. That works
