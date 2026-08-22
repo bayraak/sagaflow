@@ -117,7 +117,9 @@ describe('a step declared where it is used', () => {
     expect(((thrown as SagaError).cause as Error).message).toContain('reserved')
   })
 
-  it('obeys the one-name-per-run rule', async () => {
+  // A name used twice is numbered, not refused: the platform needs unique names and a caller
+  // writing a loop should not have to invent them.
+  it('numbers a name used more than once', async () => {
     const harness = createTestRuntime()
 
     const workflow = defineWorkflow(
@@ -128,11 +130,9 @@ describe('a step declared where it is used', () => {
       },
     )
 
-    const thrown = await workflow
-      .run({ input: { mark: 'x' }, ctx: harness.ctx })
-      .catch((error: unknown) => error)
+    await workflow.run({ input: { mark: 'x' }, ctx: harness.ctx })
 
-    expect(((thrown as SagaError).cause as Error).message).toContain('already used in this run')
+    expect(harness.steps.map((row) => row.name)).toEqual(['twice', 'twice#2'])
   })
 })
 

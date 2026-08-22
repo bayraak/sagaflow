@@ -54,6 +54,33 @@ const createBooking = saga('booking.create', async (input: { seat: string }) => 
 await createBooking({ seat: '12A' })
 ```
 
+### In a real application: bind the undo to the effect
+
+Repeating the undo at every call site is where it goes wrong — the fourth caller forgets, and the
+run that needed it most is the one that cannot be taken back. Write it once, beside the thing it
+reverses:
+
+```ts
+import { action } from 'sagaflow'
+
+export const reserveSeat = action(seats.reserve, { undo: (held) => seats.release(held.id) })
+export const chargeCard = action(cards.charge, { undo: (receipt) => cards.refund(receipt.id) })
+
+const createBooking = saga('booking.create', async (input: { seat: string }) => {
+  const seat = await reserveSeat(input.seat)
+  await chargeCard(seat.price)
+  await emit('booking.created', { seatId: seat.id })
+
+  return seat
+})
+```
+
+Inside a saga each call is a step — named after the function, recorded, retried and undone like
+any other. **Outside a saga it is exactly the function it wraps**, so the same
+`reserveSeat` is safe to call from a script, a test or a route that is not a saga at all.
+
+Use the inline `step(name, run, undo)` form for ad-hoc work that has no home of its own.
+
 That is a complete saga: a step that knows how to undo itself, a run record, and an event
 written down atomically with the run and delivered afterwards. It runs with nothing configured —
 in memory, with one line telling you so. When you are ready:
@@ -578,13 +605,15 @@ The same rule is why fan-out needs a name per item:
 
 ```ts
 for (const recipient of recipients) {
-  await step(`notify-${recipient.id}`, () => mail.send(recipient))
+  await notify(recipient) // reserve, reserve#2, reserve#3 … in call order
 }
 ```
 
-The journal is keyed by step name, so two uses under one name are one step to the platform — the
-second would be handed the first one's memoised result and its work would never happen. The
-engine refuses the duplicate rather than letting it happen quietly.
+The journal is keyed by step name, so two uses under one name would be one step to the platform —
+the second would be handed the first one's memoised result and its work would never happen. The
+engine numbers them instead: `notify`, `notify#2`, `notify#3`, in call order, which is
+deterministic for a deterministic body and therefore the same on a replay. Give them explicit
+names anyway when the name is worth reading in the trail.
 A step name is refused if it is already used in this run, or if it is one the engine uses for
 itself. Full rules:
 [`docs/versioning.md`](./docs/versioning.md).

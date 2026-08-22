@@ -69,7 +69,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   const held: EventEnvelope[] = []
   const undos: Undo<Ctx>[] = []
   const inflight: { name: string; settled: boolean; promise: Promise<unknown> }[] = []
-  const usedNames = new Set<string>()
+  const namesUsed = new Map<string, number>()
   let seq = 0
   let ordinal = 0
   let failedStep: string | null = null
@@ -138,18 +138,19 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     if (cancelledAfter !== null) throw new SagaCancelledError(runId)
 
     /*
-     * The most expensive durable bug there is, and completely silent: a platform memoises step
-     * results BY NAME, so a second use of one definition in one run is handed the first use's
-     * result and the work it was asked to do never happens — the digest goes to the first
-     * recipient three times and the other two hear nothing. Inline it appears to work, which is
-     * worse, because the bug is then only found in production.
+     * A platform memoises step results BY NAME, so two uses of one name in one run would be one
+     * step to it: the second would be handed the first one's result and its work would never
+     * happen — the digest goes to the first recipient three times and the other two hear
+     * nothing. Rather than refuse the loop somebody obviously meant to write, the engine numbers
+     * the uses: `reserve`, `reserve#2`, `reserve#3`, in CALL order.
+     *
+     * Call order is deterministic for a deterministic body, including under `Promise.all`, where
+     * every call is made in array order before anything awaits. A replay therefore arrives at
+     * the same names, which is the whole requirement.
      */
-    if (usedNames.has(step.name)) {
-      throw new Error(
-        `step "${step.name}" was already used in this run — wrap it with namedStep(step, "${step.name}-2")`,
-      )
-    }
-    usedNames.add(step.name)
+    const used = (namesUsed.get(step.name) ?? 0) + 1
+    namesUsed.set(step.name, used)
+    const recordedName = used === 1 ? step.name : `${step.name}#${used}`
 
     const current = seq
     seq += 1
@@ -164,12 +165,12 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
      * The compensation is registered from the returned value for the same reason, and never
      * from a closure taken during the step: a closure does not survive a replay either.
      */
-    const result = await runner(step.name, step.config, async ({ attempt }) => {
+    const result = await runner(recordedName, step.config, async ({ attempt }) => {
       const emitted: RawEvent[] = []
       const stepStartedAt = Date.now()
       watch(ctx.observer?.onStepStart, () => ({
         runId,
-        name: step.name,
+        name: recordedName,
         seq: current,
         attempt,
       }))
@@ -183,7 +184,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
           tenantId: ctx.tenantId,
           runId,
           seq: current,
-          name: step.name,
+          name: recordedName,
           status: 'completed',
           attempt,
           output: produced,
@@ -191,7 +192,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
         cancellationRequested = recorded.cancellationRequested
         watch(ctx.observer?.onStepEnd, () => ({
           runId,
-          name: step.name,
+          name: recordedName,
           seq: current,
           attempt,
           status: 'completed' as const,
@@ -200,19 +201,19 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
 
         return { output: produced, events: emitted }
       } catch (error) {
-        failedStep = step.name
+        failedStep = recordedName
         await ctx.journal.recordStep({
           tenantId: ctx.tenantId,
           runId,
           seq: current,
-          name: step.name,
+          name: recordedName,
           status: 'failed',
           attempt,
           error: messageOf(error),
         })
         watch(ctx.observer?.onStepEnd, () => ({
           runId,
-          name: step.name,
+          name: recordedName,
           seq: current,
           attempt,
           status: 'failed' as const,
@@ -232,7 +233,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     if (declaredUndo) {
       undos.push({
         seq: current,
-        name: step.name,
+        name: recordedName,
         config: step.config,
         run: (undoContext, reason) => declaredUndo(result.output, undoContext, reason),
       })
@@ -242,7 +243,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     // and the undo of the step that just finished is registered above before this throws, so
     // a cancelled run leaves nothing standing.
     if (cancellationRequested) {
-      cancelledAfter = step.name
+      cancelledAfter = recordedName
 
       throw new SagaCancelledError(runId)
     }
