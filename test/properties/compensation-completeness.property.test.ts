@@ -6,7 +6,7 @@ import { defineWorkflow } from '../../src/define.js'
 import { SagaError, type StepCall, type StepContext, type WorkflowHandle } from '../../src/index.js'
 import { createTestRuntime, type TestRuntime } from '../helpers/runtime'
 import { markInput } from '../helpers/steps'
-import { assertProperty } from './harness'
+import { assertProperty, createCoverage } from './harness'
 
 /*
  * Guarantee 1. Fail a run at any step and exactly the steps that finished are undone: each undo
@@ -209,11 +209,26 @@ describe('the specification tells the right unwinding from the classic wrong one
 
 describe('compensation completeness', () => {
   it('holds for every failure point, every pattern of undos and every refusal', async () => {
+    const coverage = createCoverage()
+
     await assertProperty(
       'every completed step is undone exactly once, in reverse start order',
       fc.asyncProperty(scenario, async (generated) => {
-        expect(await observed(generated)).toEqual(specified(generated))
+        const expected = specified(generated)
+        coverage.saw(`${generated.concurrent ? 'concurrent' : 'sequential'}/${expected.outcome}`)
+        coverage.saw(expected.undone.length > 1 ? 'several undos' : 'at most one undo')
+
+        expect(await observed(generated)).toEqual(expected)
       }),
+    )
+
+    coverage.reached(
+      'sequential/compensated',
+      'sequential/failed',
+      'concurrent/compensated',
+      'concurrent/failed',
+      'several undos',
+      'at most one undo',
     )
   })
 })

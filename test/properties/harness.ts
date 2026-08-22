@@ -56,3 +56,39 @@ export const assertProperty = async <Ts>(
 
   await fc.assert(property, { numRuns: propertyTrials, seed: propertySeed })
 }
+
+/**
+ * What the trials actually reached.
+ *
+ * A generator drifts. Someone tightens a bound, someone adds a field, and a property that used
+ * to exercise four outcomes quietly exercises one — still green, still passing, no longer
+ * asking anything. So each property names the situations it exists to cover and fails if a run
+ * never got to one of them. This is the difference between "the property passed" and "the
+ * property was put to work".
+ */
+export type Coverage = {
+  saw(situation: string): void
+  /** Fail unless every named situation came up at least once, saying what did come up. */
+  reached(...required: string[]): void
+}
+
+export const createCoverage = (): Coverage => {
+  const counts = new Map<string, number>()
+
+  return {
+    saw: (situation) => counts.set(situation, (counts.get(situation) ?? 0) + 1),
+    reached: (...required) => {
+      const missed = required.filter((situation) => !counts.has(situation))
+      if (missed.length === 0) return
+
+      const seen = [...counts.entries()]
+        .toSorted(([left], [right]) => left.localeCompare(right))
+        .map(([situation, count]) => `${situation} ×${count}`)
+
+      throw new Error(
+        `${propertyTrials} trials never reached ${missed.join(', ')} — ` +
+          `reached: ${seen.join(', ') || 'nothing at all'}`,
+      )
+    },
+  }
+}
