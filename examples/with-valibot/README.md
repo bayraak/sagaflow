@@ -3,7 +3,7 @@
 The same saga, validated by Valibot instead of Zod.
 
 ```bash
-bun test examples/with-valibot
+bun run test:examples
 ```
 
 sagaflow never imports either one. Validation is [Standard Schema](https://standardschema.dev), so

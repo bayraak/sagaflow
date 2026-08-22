@@ -3,7 +3,7 @@
 MCP-style tools for an agent, on sagaflow. **Reads run, writes propose.**
 
 ```bash
-bun test examples/agent-tools
+bun run test:examples
 ```
 
 An agent taking actions on a real system has the same problem a backend does, only louder: it

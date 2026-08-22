@@ -9,7 +9,7 @@ curl -X POST 'http://localhost:3000/bookings?seat=12A'
 curl -X POST 'http://localhost:3000/bookings?seat=12A&confirm=false'   # undoes itself
 ```
 
-Run its tests: `bun test examples/bun-inline`.
+Run its tests: `bun run test:examples` from the repository root.
 
 **What to look at**
 

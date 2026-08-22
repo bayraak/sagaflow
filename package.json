@@ -70,7 +70,7 @@
     "fmt:check": "oxfmt --check .",
     "lint": "oxlint src test test-workerd examples",
     "test": "bun test",
-    "test:examples": "bun test --cwd examples",
+    "test:examples": "bun test --cwd examples bun-inline with-valibot agent-tools",
     "test:workerd": "vitest run",
     "test:example-worker": "vitest run --root examples/cloudflare-worker",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.examples.json --noEmit"
