@@ -51,8 +51,17 @@ export const createMemoryJournal = () => {
   const outbox: EventEnvelope[] = []
   const dispatched: string[] = []
 
+  // A key is claimed by a run that is still standing — running, or completed and answerable.
+  // A run that failed, compensated or was cancelled RELEASES its key, because the work it was
+  // asked to do did not happen and asking again is the only way to get it done. A table
+  // enforces the same rule with a partial unique index; see src/d1/schema.sql.
   const heldRun = (tenantId: string, idempotencyKey: string) =>
-    runs.find((run) => run.tenantId === tenantId && run.idempotencyKey === idempotencyKey)
+    runs.find(
+      (run) =>
+        run.tenantId === tenantId &&
+        run.idempotencyKey === idempotencyKey &&
+        (run.status === 'running' || run.status === 'completed'),
+    )
 
   const journal: RunJournal = {
     insertRun: async (params) => {

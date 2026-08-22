@@ -101,8 +101,11 @@ export type EventSink = {
  */
 export type RunJournal = {
   /**
-   * MUST throw when the idempotency key is already held. The throw IS the dedup signal: the
-   * engine answers it by looking the held run up rather than doing the work twice.
+   * MUST throw when the idempotency key is already HELD — that is, when a run with the same
+   * `(tenantId, idempotencyKey)` is `running` or `completed`. The throw IS the dedup signal:
+   * the engine answers it by looking the held run up rather than doing the work twice. A run
+   * that failed, compensated or was cancelled releases its key, so the work can be asked for
+   * again.
    */
   insertRun: (params: {
     tenantId: string
@@ -143,6 +146,7 @@ export type RunJournal = {
    * survivable — the sweeper re-sends, and the consumer recognises the message by its id.
    */
   markEventsDispatched: (params: { tenantId: string; ids: string[] }) => Promise<void>
+  /** Held runs only, by the same rule `insertRun` refuses by. */
   findRunByIdempotencyKey: (params: {
     tenantId: string
     idempotencyKey: string
