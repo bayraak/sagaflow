@@ -9,10 +9,11 @@ export { executeDurable } from './durable'
 export { executeRun, type StepRunner } from './engine'
 export { messageOf, WorkflowError } from './errors'
 export { lifecycleEventTypes, workflowCompensatedEvent, workflowCompletedEvent } from './events'
-export { dispatchEvents, eventBatchLimit } from './outbox'
+export { dispatchEvents, eventBatchLimit, eventSweepLimit, sweepEventOutbox } from './outbox'
 export { createDurableRegistry, registerDurableWorkflow, type RegisteredWorkflow } from './registry'
 export { SchemaError } from './schema'
 export { createStep, defaultStepConfig, namedStep, reservedStepNames } from './step'
+export { sweepAbandonedRuns } from './sweep'
 export { instanceIdFor, startDurableWorkflow } from './start'
 export type {
   CompensationOutcome,

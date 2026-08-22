@@ -1,4 +1,4 @@
-import type { EventEnvelope, EventSink } from './types'
+import type { EventEnvelope, EventSink, RunJournal } from './types'
 
 /**
  * What one batched send carries. A drain larger than this is more than one call, and the
@@ -28,6 +28,57 @@ export const dispatchEvents = async (options: {
     await options.markDispatched(batch.map((message) => message.id))
 
     delivered += batch.length
+  }
+
+  return delivered
+}
+
+/**
+ * How many rows one sweep considers. A sweep is a background job on a schedule, so it takes a
+ * bounded bite and lets the next one take the rest rather than holding a connection open over
+ * a backlog.
+ */
+export const eventSweepLimit = 500
+
+/**
+ * The other half of the outbox: what comes back for the events a run's own drain could not
+ * deliver. The drain is best-effort by design — the mutation committed, and a queue that could
+ * not be reached is not the caller's problem — and this is what makes that true.
+ *
+ * It reads across every tenant, because nobody is asking on a tenant's behalf, and delivers
+ * each tenant's rows under that tenant so a journal that scopes its writes still can.
+ *
+ * `olderThanMs` leaves the youngest rows alone: one written a moment ago probably belongs to a
+ * run whose own drain is still in flight, and waiting for the next sweep costs a few minutes
+ * and saves a duplicate delivery. Run it on a schedule; it is idempotent, and a row delivered
+ * twice is a message the consumer recognises by its id.
+ */
+export const sweepEventOutbox = async (options: {
+  journal: RunJournal
+  sink: EventSink
+  now?: number
+  olderThanMs?: number
+  limit?: number
+}): Promise<number> => {
+  const stranded = await options.journal.listUndispatchedEvents({
+    before: (options.now ?? Date.now()) - (options.olderThanMs ?? 0),
+    limit: options.limit ?? eventSweepLimit,
+  })
+
+  const byTenant = new Map<string, EventEnvelope[]>()
+  for (const row of stranded) {
+    const carried = byTenant.get(row.tenantId) ?? []
+    carried.push(row.envelope)
+    byTenant.set(row.tenantId, carried)
+  }
+
+  let delivered = 0
+  for (const [tenantId, envelopes] of byTenant) {
+    delivered += await dispatchEvents({
+      sink: options.sink,
+      envelopes,
+      markDispatched: (ids) => options.journal.markEventsDispatched({ tenantId, ids }),
+    })
   }
 
   return delivered

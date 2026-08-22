@@ -16,6 +16,7 @@ export type MemoryRunRow = {
   input: unknown
   status: RunStatus
   cancelRequested: boolean
+  startedAt: number
   output?: unknown
   error?: string | null
 }
@@ -45,7 +46,8 @@ export type MemoryFinishRow = {
  * (tenant, idempotency key) — enforced here too, so a suite exercises the engine's behaviour
  * rather than a fixture's convenience.
  */
-export const createMemoryJournal = () => {
+export const createMemoryJournal = (options: { now?: () => number } = {}) => {
+  const now = options.now ?? (() => Date.now())
   const runs: MemoryRunRow[] = []
   const steps: MemoryStepRow[] = []
   const finishes: MemoryFinishRow[] = []
@@ -75,7 +77,7 @@ export const createMemoryJournal = () => {
       if (claimed) throw new Error('the idempotency key is already held')
 
       const id = `run_${runs.length + 1}`
-      runs.push({ id, status: 'running', cancelRequested: false, ...params })
+      runs.push({ id, status: 'running', cancelRequested: false, startedAt: now(), ...params })
 
       return id
     },
@@ -127,6 +129,27 @@ export const createMemoryJournal = () => {
     },
     markEventsDispatched: async (params) => {
       dispatched.push(...params.ids)
+    },
+    listUndispatchedEvents: async (params) =>
+      outbox
+        .filter((event) => !dispatched.includes(event.id) && event.occurredAt <= params.before)
+        .toSorted((left, right) => left.occurredAt - right.occurredAt)
+        .slice(0, params.limit)
+        .map((envelope) => ({ tenantId: envelope.tenantId, envelope })),
+    failAbandonedRuns: async (params) => {
+      const abandoned = runs.filter(
+        (run) =>
+          run.execution === params.execution &&
+          run.status === 'running' &&
+          run.startedAt < params.startedBefore,
+      )
+
+      for (const run of abandoned) {
+        run.status = 'failed'
+        run.error = params.error
+      }
+
+      return abandoned.length
     },
     findRunByIdempotencyKey: async (params) => {
       const run = heldRun(params.tenantId, params.idempotencyKey)

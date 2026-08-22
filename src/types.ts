@@ -157,6 +157,24 @@ export type RunJournal = {
    * a run that has already ended cannot be stopped.
    */
   requestCancellation: (params: { tenantId: string; runId: string }) => Promise<boolean>
+  /**
+   * Every tenant's undispatched events, oldest first — the sweeper's query, and the one place
+   * in the contract that is deliberately not tenant-scoped, because nobody is asking on a
+   * tenant's behalf.
+   */
+  listUndispatchedEvents: (params: {
+    before: number
+    limit: number
+  }) => Promise<{ tenantId: string; envelope: EventEnvelope }[]>
+  /**
+   * Close the inline runs started before the cutoff that are still `running`, and answer how
+   * many. Durable runs are never touched: one may legitimately sleep for a week.
+   */
+  failAbandonedRuns: (params: {
+    execution: 'inline'
+    startedBefore: number
+    error: string
+  }) => Promise<number>
   /** Held runs only, by the same rule `insertRun` refuses by. */
   findRunByIdempotencyKey: (params: {
     tenantId: string
