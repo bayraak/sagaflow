@@ -25,7 +25,9 @@ CONSTANTS
     DeterministicIds,   \* TRUE: envelope ids are ${runId}:${ordinal}; FALSE: fresh per invocation
     JournalledFailures, \* TRUE: a step's failure is journalled and repeats on replay
     LiveSweep,          \* TRUE: the abandoned-run sweeper may close a run that is still alive
-    Cancellable         \* TRUE: the run may be asked to stop
+    Cancellable,        \* TRUE: the run may be asked to stop
+    EntryGuard,         \* TRUE: the journal can read a run back, so a closed run is not re-walked
+    TrailAtEntry        \* TRUE: the journal can read a trail back, so the run's history is known
 
 ASSUME N \in Nat /\ N >= 1
 ASSUME MaxInvocations \in Nat /\ MaxInvocations >= 1
@@ -34,9 +36,19 @@ ASSUME DeterministicIds \in BOOLEAN
 ASSUME JournalledFailures \in BOOLEAN
 ASSUME LiveSweep \in BOOLEAN
 ASSUME Cancellable \in BOOLEAN
+ASSUME EntryGuard \in BOOLEAN
+ASSUME TrailAtEntry \in BOOLEAN
 
 Steps == 1..N
-Ordinals == 0..N
+
+\* 0..N-1 are the steps' emissions and N is the completed lifecycle. The two
+\* above them are the closures that are NOT emissions from the body: the
+\* compensated announcement, and the abandoned-run sweeper's. They are
+\* identified by what they are rather than by a position in the run's emission
+\* sequence, which is what stops two different closers reaching for one id.
+CompensatedOrdinal == N + 1
+SweptOrdinal       == N + 2
+Ordinals == 0..(N + 2)
 
 Running == "running"
 TerminalStatuses == {"completed", "compensated", "failed", "cancelled"}
@@ -73,7 +85,8 @@ VARIABLES
     stepMemo,           \* whether the platform checkpointed each step
     undoDone,           \* the steps whose undo has succeeded
     undoOrder,          \* the order those undos succeeded in
-    undoRefused,        \* the steps whose undo refused during THIS invocation
+    undoRefused,        \* the steps whose undo refused, recorded in the trail
+    unwindBegan,        \* the trail holds a compensation: the run started going down
     cursor,             \* the next step index in the current invocation
     phase,
     minted,             \* the current invocation's envelope ordinal counter
@@ -99,14 +112,17 @@ VARIABLES
 journalVars  == <<status, closes, outbox, outboxAtFirstClose>>
 consumerVars == <<dispatched, seenIds, appliedFacts, doubleApplied, lostMarks>>
 runVars      == <<cursor, phase, minted, unwindCause, finishTarget>>
-memoVars     == <<stepRec, stepMemo, undoDone, undoOrder, undoRefused, finishMemo, finishCommits>>
+memoVars     ==
+    <<stepRec, stepMemo, undoDone, undoOrder, undoRefused, unwindBegan, finishMemo,
+      finishCommits>>
 envVars      == <<mode, invocations, cancelReq, secondClaim>>
 closeVars    == <<completeAtClose, orderedAtClose, effectAfterClose>>
 vars ==
     <<status, closes, outbox, outboxAtFirstClose,
       dispatched, seenIds, appliedFacts, doubleApplied, lostMarks,
       cursor, phase, minted, unwindCause, finishTarget,
-      stepRec, stepMemo, undoDone, undoOrder, undoRefused, finishMemo, finishCommits,
+      stepRec, stepMemo, undoDone, undoOrder, undoRefused, unwindBegan, finishMemo,
+      finishCommits,
       mode, invocations, cancelReq, secondClaim,
       completeAtClose, orderedAtClose, effectAfterClose, outputAccepted>>
 
@@ -145,6 +161,7 @@ Init ==
     /\ undoDone = {}
     /\ undoOrder = << >>
     /\ undoRefused = {}
+    /\ unwindBegan = FALSE
     /\ cursor = 1
     /\ phase = "body"
     /\ minted = 0
@@ -210,6 +227,7 @@ StepSucceeds(i) ==
     /\ phase = "body"
     /\ cursor = i
     /\ Fresh(i)
+    /\ ~unwindBegan
     /\ stepRec' = [stepRec EXCEPT ![i] = "done"]
     \* A step that returns to the body has been checkpointed: writing the
     \* result IS what the platform's step primitive does before it returns.
@@ -229,7 +247,7 @@ StepSucceeds(i) ==
           /\ unwindCause' = unwindCause
           /\ cursor' = i + 1
     /\ UNCHANGED finishTarget
-    /\ UNCHANGED <<undoDone, undoOrder, undoRefused, finishMemo, finishCommits>>
+    /\ UNCHANGED <<undoDone, undoOrder, undoRefused, unwindBegan, finishMemo, finishCommits>>
     /\ UNCHANGED journalVars
     /\ UNCHANGED consumerVars
     /\ UNCHANGED envVars
@@ -241,11 +259,13 @@ StepFails(i) ==
     /\ phase = "body"
     /\ cursor = i
     /\ Fresh(i)
+    /\ ~unwindBegan
     /\ stepRec' = [stepRec EXCEPT ![i] = "failed"]
     /\ phase' = "unwind"
     /\ unwindCause' = "failure"
     /\ UNCHANGED <<cursor, minted, finishTarget>>
-    /\ UNCHANGED <<stepMemo, undoDone, undoOrder, undoRefused, finishMemo, finishCommits>>
+    /\ UNCHANGED
+           <<stepMemo, undoDone, undoOrder, undoRefused, unwindBegan, finishMemo, finishCommits>>
     /\ UNCHANGED journalVars
     /\ UNCHANGED consumerVars
     /\ UNCHANGED envVars
@@ -253,9 +273,38 @@ StepFails(i) ==
     /\ UNCHANGED <<completeAtClose, orderedAtClose>>
     /\ UNCHANGED outputAccepted
 
+(***************************************************************************)
+(* A run that had already begun unwinding is not carried any further        *)
+(* forward, and is not allowed to finish.                                   *)
+(*                                                                         *)
+(* Replaying the memoised steps is right -- that is how their undos are     *)
+(* registered again -- but a step that never ran must not run now: a        *)
+(* memoised step does not call recordStep and so does not re-read the flag  *)
+(* that started the unwind, and the new step's undo would land after an     *)
+(* undo that started EARLIER had already succeeded. And when every step is  *)
+(* memoised there is no fresh step to stop at, so the body would otherwise  *)
+(* reach the end and close the run COMPLETED with all of its effects        *)
+(* already reversed.                                                        *)
+(***************************************************************************)
+ResumeUnwinding ==
+    /\ phase = "body"
+    /\ unwindBegan
+    /\ \/ cursor = N + 1
+       \/ \E i \in Steps : cursor = i /\ Fresh(i)
+    /\ phase' = "unwind"
+    /\ unwindCause' = "failure"
+    /\ UNCHANGED <<cursor, minted, finishTarget>>
+    /\ UNCHANGED journalVars
+    /\ UNCHANGED consumerVars
+    /\ UNCHANGED memoVars
+    /\ UNCHANGED envVars
+    /\ UNCHANGED closeVars
+    /\ UNCHANGED outputAccepted
+
 BodyCompletes ==
     /\ phase = "body"
     /\ cursor = N + 1
+    /\ ~unwindBegan
     /\ outputAccepted
     /\ phase' = "finish"
     /\ finishTarget' = "completed"
@@ -273,6 +322,7 @@ BodyCompletes ==
 OutputRefused ==
     /\ phase = "body"
     /\ cursor = N + 1
+    /\ ~unwindBegan
     /\ ~outputAccepted
     /\ phase' = "unwind"
     /\ unwindCause' = "output"
@@ -289,8 +339,10 @@ OutputRefused ==
 (*                                                                         *)
 (* Backwards, by the order the steps were STARTED in. Every undo is         *)
 (* attempted even when an earlier one refuses. An undo that succeeded is    *)
-(* checkpointed and is skipped on a replay; one that refused was not, and   *)
-(* is attempted again.                                                      *)
+(* checkpointed and is skipped on a replay. One that refused was not        *)
+(* checkpointed, but it WAS recorded in the trail, and a later invocation   *)
+(* reads that and treats the refusal as final: the run is failed, which     *)
+(* says truthfully that something was left standing.                        *)
 (***************************************************************************)
 Outstanding == Undoable \ (undoDone \cup undoRefused)
 
@@ -300,6 +352,7 @@ UndoSucceeds ==
     /\ undoDone' = undoDone \cup {Max(Outstanding)}
     /\ undoOrder' = Append(undoOrder, Max(Outstanding))
     /\ UNCHANGED <<undoRefused, stepRec, stepMemo, finishMemo, finishCommits>>
+    /\ unwindBegan' = TRUE
     /\ UNCHANGED runVars
     /\ UNCHANGED journalVars
     /\ UNCHANGED consumerVars
@@ -312,6 +365,7 @@ UndoRefuses ==
     /\ Outstanding # {}
     /\ undoRefused' = undoRefused \cup {Max(Outstanding)}
     /\ UNCHANGED <<undoDone, undoOrder, stepRec, stepMemo, finishMemo, finishCommits>>
+    /\ unwindBegan' = TRUE
     /\ UNCHANGED runVars
     /\ UNCHANGED journalVars
     /\ UNCHANGED consumerVars
@@ -349,10 +403,14 @@ UnwindCompletes ==
 (* two separate events, and a crash between them is the case a durable      *)
 (* re-invocation actually produces.                                         *)
 (***************************************************************************)
+\* The closure announcement is a fact about the RUN, so its id is a function of
+\* the run and not of how far this invocation happened to walk. A longer walk
+\* used to mint it at a higher ordinal -- a different id, which the outbox's
+\* conflict clause cannot recognise as the same announcement.
 FinishEvents ==
     IF finishTarget = "completed"
       THEN { Envelope(i - 1, "step") : i \in Steps } \cup { Envelope(N, "completed") }
-      ELSE { Envelope(minted, "compensated") }
+      ELSE { Envelope(CompensatedOrdinal, "compensated") }
 
 FinishCommit ==
     /\ phase = "finish"
@@ -372,7 +430,7 @@ FinishCommit ==
     /\ finishCommits' = finishCommits + 1
     /\ phase' = "committed"
     /\ UNCHANGED <<cursor, minted, unwindCause, finishTarget>>
-    /\ UNCHANGED <<stepRec, stepMemo, undoDone, undoOrder, undoRefused, finishMemo>>
+    /\ UNCHANGED <<stepRec, stepMemo, undoDone, undoOrder, undoRefused, unwindBegan, finishMemo>>
     /\ UNCHANGED consumerVars
     /\ UNCHANGED envVars
     /\ UNCHANGED effectAfterClose
@@ -398,7 +456,8 @@ FinishCheckpointed ==
     /\ finishMemo' = (mode = "durable")
     /\ phase' = IF finishTarget = "completed" THEN "drain" ELSE "stopped"
     /\ UNCHANGED <<cursor, minted, unwindCause, finishTarget>>
-    /\ UNCHANGED <<stepRec, stepMemo, undoDone, undoOrder, undoRefused, finishCommits>>
+    /\ UNCHANGED
+           <<stepRec, stepMemo, undoDone, undoOrder, undoRefused, unwindBegan, finishCommits>>
     /\ UNCHANGED journalVars
     /\ UNCHANGED consumerVars
     /\ UNCHANGED envVars
@@ -468,14 +527,16 @@ SweepOutbox ==
 (* process carrying it dies, nothing is left to close it. Durable runs are   *)
 (* never touched at any age.                                                *)
 (*                                                                         *)
-(* The run emitted nothing that was written down -- it never reached its     *)
-(* finish -- so the announcement takes the first ordinal.                    *)
+(* "The run emitted nothing -- it never reached its finish" is sound about a *)
+(* run that really is dead and unsound as an identity: ordinal 0 is also the *)
+(* id of an emission a live run really made. The sweep is identified by what *)
+(* it is instead, so the two cannot collide.                                 *)
 (***************************************************************************)
 SweepAbandoned ==
     /\ mode = "inline"
     /\ status = Running
     /\ (phase = "dead" \/ LiveSweep)
-    /\ LET written == Insert(outbox, Envelope(0, "compensated"))
+    /\ LET written == Insert(outbox, Envelope(SweptOrdinal, "compensated"))
        IN /\ outbox' = written
           /\ outboxAtFirstClose' = written
     /\ status' = "failed"
@@ -501,18 +562,28 @@ Crash ==
     /\ UNCHANGED outputAccepted
 
 \* The platform re-invokes the instance. It knows nothing about the run's
-\* status, so it may re-invoke a run whose finish already committed.
+\* status, so it may re-invoke a run whose finish already committed -- which
+\* is why the invocation reads the run before it runs anything, and stops if
+\* it has already ended. Replaying memoised steps would be harmless; walking
+\* PAST the point where the invocation that closed the run stopped is not,
+\* and a memoised step never re-reads the cancellation flag that stopped it.
+\*
+\* The trail is read in the same breath, so an undo this run already recorded
+\* as refused is not attempted again: retrying it would land after the undos
+\* that came later in reverse order have already succeeded and been memoised.
 Reinvoke ==
     /\ mode = "durable"
     /\ phase = "dead"
     /\ invocations < MaxInvocations
     /\ invocations' = invocations + 1
-    /\ phase' = "body"
+    /\ phase' = IF EntryGuard /\ status # Running THEN "stopped" ELSE "body"
     /\ cursor' = 1
     /\ minted' = 0
     /\ unwindCause' = "none"
     /\ finishTarget' = "none"
-    /\ undoRefused' = {}
+    \* Both read from the trail, so both are what a journal WITHOUT listRunSteps loses.
+    /\ undoRefused' = IF TrailAtEntry THEN undoRefused ELSE {}
+    /\ unwindBegan' = IF TrailAtEntry THEN unwindBegan ELSE FALSE
     /\ UNCHANGED <<stepRec, stepMemo, undoDone, undoOrder, finishMemo, finishCommits>>
     /\ UNCHANGED journalVars
     /\ UNCHANGED consumerVars
@@ -554,6 +625,7 @@ Next ==
            \/ StepRefails(i)
            \/ StepSucceeds(i)
            \/ StepFails(i)
+    \/ ResumeUnwinding
     \/ BodyCompletes
     \/ OutputRefused
     \/ UndoSucceeds
@@ -584,6 +656,7 @@ TypeOK ==
     /\ stepMemo \in [Steps -> BOOLEAN]
     /\ undoDone \subseteq Steps
     /\ undoRefused \subseteq Steps
+    /\ unwindBegan \in BOOLEAN
     /\ Len(undoOrder) <= N
     /\ \A k \in 1..Len(undoOrder) : undoOrder[k] \in Steps
     /\ cursor \in 1..(N + 1)
@@ -669,8 +742,13 @@ I7_OneClosureAnnounced ==
     /\ (status \in {"compensated", "failed", "cancelled"})
          => ~(\E fact \in OutboxFacts : fact.kind = "completed")
 
-\* I8. Nothing the body does happens after the run has been closed. The
-\* engine has no such guard today; this invariant is what names the gap.
+\* I8. Nothing the body does happens after the run has been closed.
 I8_NoEffectAfterClose == ~effectAfterClose
+
+\* I9. A run that closed COMPLETED undid nothing. The caller of a completed
+\* run is entitled to believe its effects are standing, and a run that
+\* unwound and then reported success is the worst answer this engine could
+\* give: every effect reversed, and the caller told it worked.
+I9_CompletedUndidNothing == (status = "completed") => (undoDone = {})
 
 =============================================================================

@@ -82,10 +82,12 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   invoke: (handle: WorkflowHandle<Ctx>) => Promise<Output>
   output?: StandardSchemaV1
   /**
-   * Compensation step names this run has already recorded as refused, read from the trail
-   * before the invocation began. Empty for an inline run, which cannot be re-invoked.
+   * What the run's trail said before this invocation began. Empty for an inline run, which
+   * cannot be re-invoked, and for a journal that cannot read a trail back.
    */
   refused?: ReadonlySet<string>
+  completedSteps?: ReadonlySet<string>
+  unwindingBegan?: boolean
 }): Promise<Output> => {
   const { name, runId, ctx, runner, invoke } = options
   const held: EventEnvelope[] = []
@@ -173,6 +175,23 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     const used = (namesUsed.get(step.name) ?? 0) + 1
     namesUsed.set(step.name, used)
     const recordedName = used === 1 ? step.name : `${step.name}#${used}`
+
+    /*
+     * A run that had already begun unwinding is not carried any further forward.
+     *
+     * The instance died mid-unwind, before the write that would have closed the run, so nothing
+     * refuses this invocation — and replaying the memoised steps is exactly right, because that
+     * is how their undos are registered again. What is not right is reaching a step that never
+     * ran and running it for real: a memoised step does not call `recordStep` and so does not
+     * re-read the flag that started the unwind, and the new step's undo would then land after
+     * an undo that started EARLIER had already succeeded. Reverse start order would be a claim
+     * about one invocation rather than about the run.
+     */
+    if (options.unwindingBegan && !options.completedSteps?.has(recordedName)) {
+      throw new SagaflowError(
+        `the run had already begun unwinding when step '${recordedName}' was reached`,
+      )
+    }
 
     const current = seq
     seq += 1
@@ -485,6 +504,19 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     // Stopping is not the body's decision. A body that caught the cancellation and carried on
     // does not get to hand back a completed run.
     if (cancelledAfter !== null) throw new SagaCancelledError(runId)
+
+    /*
+     * Neither is finishing, once the run has begun going down.
+     *
+     * A run can unwind completely and die before the write that records it. Every step is then
+     * memoised, so a re-invocation reaches the end of the body without running anything fresh
+     * and without any step re-reading the flag that started the unwind — and would close the
+     * run COMPLETED with every one of its effects already reversed. That is the worst answer
+     * this engine could give: the caller told the work succeeded, and nothing left standing.
+     */
+    if (options.unwindingBegan) {
+      throw new SagaflowError('the run had already begun unwinding before this invocation')
+    }
 
     /*
      * A step the body started and never awaited would otherwise let the run be written down as

@@ -7,7 +7,11 @@
 #
 #   ./fetch-tools.sh
 #
-# Three of the six models are EXPECTED to report a violated invariant. See
+# Two of the seven models are the shipped design; they are expected to be
+# clean. The other five are ablations, each removing one thing the engine
+# relies on -- an optional journal read, deterministic envelope ids, a sweep
+# window set correctly. Four of those are EXPECTED to report a violated
+# invariant, because measuring what the missing thing buys is the point. See
 # RESULTS.md; the exit status of this script is the number of models whose
 # outcome differed from what RESULTS.md records.
 
@@ -21,15 +25,16 @@ if [ ! -f "$jar" ]; then
   exit 2
 fi
 
-# config:expected — "clean", or "refuted" for a model RESULTS.md records as
-# finding a real counterexample. Which invariant TLC reports first depends on
+# config:expected — "clean", or "refuted" for an ablation RESULTS.md records as
+# producing a counterexample. Which invariant TLC reports first depends on
 # worker scheduling, so the models with findings are matched on "some
 # invariant was refuted" rather than on a particular one.
 models=(
-  "Sagaflow.cfg:refuted"
-  "SagaflowProven.cfg:clean"
+  "Sagaflow.cfg:clean"
   "SagaflowDeep.cfg:clean"
-  "SagaflowNoCancel.cfg:clean"
+  "SagaflowNoEntryGuard.cfg:clean"
+  "SagaflowNoJournalReads.cfg:refuted"
+  "SagaflowNoTrail.cfg:refuted"
   "SagaflowRandomIds.cfg:refuted"
   "SagaflowLiveSweep.cfg:refuted"
 )

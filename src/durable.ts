@@ -44,27 +44,45 @@ const entryStateOf = async (
 }
 
 /*
- * The undos this run has already recorded as refused.
+ * What the run's trail says, read once, before this invocation runs anything.
  *
- * A refused undo is not checkpointed by the platform, so without this the next invocation
- * simply tries it again — after the undos that came later in reverse order have already
- * succeeded. One read, next to the entry guard's, and skipped by a journal that cannot read a
- * trail back: such a journal keeps the older behaviour, and the residual is documented.
+ * Two facts come out of the same read. An undo recorded as REFUSED is final: a refused undo is
+ * not checkpointed, so without this the next invocation simply tries it again — after the undos
+ * that came later in reverse order have already succeeded. And a trail that holds ANY
+ * compensation says the run had begun unwinding, which is the point past which the body must
+ * not be carried forward.
+ *
+ * Skipped by a journal that cannot read a trail back: such a journal keeps the older behaviour
+ * rather than being refused service, and the residual is documented.
  */
-const refusedCompensationsOf = async (
+const trailAtEntry = async (
   journal: RunJournal,
   tenantId: string,
   runId: string,
-): Promise<ReadonlySet<string>> => {
-  if (!journal.listRunSteps) return new Set()
+): Promise<{
+  refused: ReadonlySet<string>
+  completedSteps: ReadonlySet<string>
+  unwindingBegan: boolean
+}> => {
+  if (!journal.listRunSteps) {
+    return { refused: new Set(), completedSteps: new Set(), unwindingBegan: false }
+  }
 
   const trail = await journal.listRunSteps({ tenantId, runId })
+  const compensations = trail.filter((entry) => entry.name.startsWith(compensationPrefix))
 
-  return new Set(
-    trail
-      .filter((entry) => entry.status === 'failed' && entry.name.startsWith(compensationPrefix))
-      .map((entry) => entry.name),
-  )
+  return {
+    refused: new Set(
+      compensations.filter((entry) => entry.status === 'failed').map((entry) => entry.name),
+    ),
+    completedSteps: new Set(
+      trail
+        .filter((entry) => entry.status === 'completed')
+        .filter((entry) => !entry.name.startsWith(compensationPrefix))
+        .map((entry) => entry.name),
+    ),
+    unwindingBegan: compensations.length > 0,
+  }
 }
 
 /**
@@ -102,11 +120,11 @@ export const executeDurable = async <
     })
   }
 
-  const refused = await refusedCompensationsOf(ctx.journal, ctx.tenantId, params.runId)
+  const trail = await trailAtEntry(ctx.journal, ctx.tenantId, params.runId)
   const parsed = await validate(definition.input, params.input, `the input of ${definition.name}`)
 
   return executeRun<Ctx, Output>({
-    refused,
+    ...trail,
     name: definition.name,
     runId: params.runId,
     ctx,
