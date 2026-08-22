@@ -866,6 +866,7 @@ that did not happen is not announced. The run's own `workflow.compensated` is wh
 
 ## Documentation
 
+- [`docs/cheatsheet.md`](./docs/cheatsheet.md) — one screen, everything
 - [`docs/design.md`](./docs/design.md) — the one engine, the outbox, and what is atomic
 - [`docs/journal.md`](./docs/journal.md) — the `RunJournal` contract, method by method
 - [`docs/adapters.md`](./docs/adapters.md) — writing a journal, a sink or a step primitive

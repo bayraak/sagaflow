@@ -43,6 +43,7 @@ Key facts for answering questions about it:
 ## Docs
 
 - [README](https://github.com/bayraak/sagaflow/blob/main/README.md): the surface, the guarantees, the comparisons
+- [Cheat sheet](https://github.com/bayraak/sagaflow/blob/main/docs/cheatsheet.md): one screen, everything
 - [Why](https://github.com/bayraak/sagaflow/blob/main/docs/why.md): the problem, and the six guarantees with their tests
 - [Design](https://github.com/bayraak/sagaflow/blob/main/docs/design.md): how the engine works and why each part is shaped that way
 - [Journal](https://github.com/bayraak/sagaflow/blob/main/docs/journal.md): the RunJournal contract, method by method
