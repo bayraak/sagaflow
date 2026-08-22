@@ -76,9 +76,11 @@ export const compensatedEnvelope = (options: {
   actor: string | null
   error: string
   outcome: CompensationOutcome
-  ordinal: number
+  /** How this closure is identified. A fact about the run, so never an emission ordinal. */
+  id: string
 }): EventEnvelope =>
-  createEnvelope({
+  envelopeWithId({
+    id: options.id,
     type: lifecycleEvents.compensated,
     payload: {
       runId: options.runId,
@@ -89,8 +91,24 @@ export const compensatedEnvelope = (options: {
     tenantId: options.tenantId,
     actor: options.actor,
     runId: options.runId,
-    ordinal: options.ordinal,
   })
+
+export const envelopeWithId = (options: {
+  id: string
+  type: string
+  payload: unknown
+  tenantId: string
+  actor: string | null
+  runId: string
+}): EventEnvelope => ({
+  id: options.id,
+  type: options.type,
+  payload: options.payload,
+  tenantId: options.tenantId,
+  actor: options.actor,
+  runId: options.runId,
+  occurredAt: Date.now(),
+})
 
 export const createEnvelope = (options: {
   type: string

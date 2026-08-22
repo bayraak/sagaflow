@@ -88,7 +88,10 @@ describe('a durable run on a real Workflows binding', () => {
       started.runId,
     )
     expect(events.map((event) => event.type)).toEqual(['thing.shipped', 'workflow.completed'])
-    expect(events.map((event) => event.id)).toEqual([`${started.runId}:0`, `${started.runId}:1`])
+    expect(events.map((event) => event.id)).toEqual([
+      `${started.runId}:0`,
+      `${started.runId}:completed`,
+    ])
     expect(events.every((event) => event.dispatched_at !== null)).toBe(true)
   }, 30_000)
 

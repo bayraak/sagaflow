@@ -1,7 +1,13 @@
 import { SagaCancelledError } from './cancel.js'
 import { messageOf, SagaError, SagaflowError } from './errors.js'
-import { createEnvelope, lifecycleEvents, validateEmission, type RawEvent } from './events.js'
-import { compensationIdempotencyKey, stepIdempotencyKey } from './identity.js'
+import {
+  createEnvelope,
+  envelopeWithId,
+  lifecycleEvents,
+  validateEmission,
+  type RawEvent,
+} from './events.js'
+import { compensationIdempotencyKey, lifecycleEnvelopeId, stepIdempotencyKey } from './identity.js'
 import { dispatchEvents } from './outbox.js'
 import { validate } from './schema.js'
 import {
@@ -500,9 +506,13 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
      * It is not drained here. A run that fell over is on nobody's hot path, its announcement
      * is not worth a queue call on the way out of a failure, and the sweeper carries it.
      */
-    const announcement = envelopeFor({
+    const announcement = envelopeWithId({
+      id: lifecycleEnvelopeId(runId, 'compensated'),
       type: lifecycleEvents.compensated,
       payload: { runId, name, error: messageOf(error), outcome },
+      tenantId: ctx.tenantId,
+      actor: ctx.actor ?? null,
+      runId,
     })
 
     await runner(reservedStepNames.finishRun, defaultStepConfig, () =>
@@ -533,7 +543,16 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     })
   }
 
-  mint({ type: lifecycleEvents.completed, payload: { runId, name } })
+  held.push(
+    envelopeWithId({
+      id: lifecycleEnvelopeId(runId, 'completed'),
+      type: lifecycleEvents.completed,
+      payload: { runId, name },
+      tenantId: ctx.tenantId,
+      actor: ctx.actor ?? null,
+      runId,
+    }),
+  )
 
   /*
    * The run closes and its events are written down in ONE atomic batch, so a completed run

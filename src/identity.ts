@@ -25,3 +25,17 @@ export const compensationIdempotencyKey = (runId: string, seq: number): string =
 
 /** What identifies one emission of one run, to the outbox and to every consumer. */
 export const envelopeId = (runId: string, ordinal: number): string => `${runId}:${ordinal}`
+
+/**
+ * What identifies a fact about the RUN rather than an emission from its body.
+ *
+ * Deliberately not an ordinal from the emission sequence. An ordinal is a function of how far
+ * the body walked, and a re-invoked body can walk further than the invocation that closed the
+ * run did — which minted the announcement at a higher ordinal, under a different id, which the
+ * outbox's conflict clause could not recognise as a repeat. A run closes once, so its closure
+ * has one id, whoever writes it and however far anybody walked.
+ */
+export const lifecycleEnvelopeId = (
+  runId: string,
+  closure: 'compensated' | 'completed' | 'start-refused' | 'swept',
+): string => `${runId}:${closure}`

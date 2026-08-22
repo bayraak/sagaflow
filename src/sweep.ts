@@ -1,4 +1,5 @@
 import { compensatedEnvelope } from './events.js'
+import { envelopeId } from './identity.js'
 import type { RunJournal } from './types.js'
 
 /** How many abandoned runs one sweep closes. The next sweep takes the rest. */
@@ -53,7 +54,7 @@ export const sweepAbandonedRuns = async (options: {
           actor: null,
           error,
           outcome: 'failed',
-          ordinal: 0,
+          id: envelopeId(run.runId, 0),
         }),
       ],
     })

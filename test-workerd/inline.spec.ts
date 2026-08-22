@@ -66,7 +66,7 @@ describe('an inline run inside a worker', () => {
       body.runId,
     )
     expect(events.map((event) => event.type)).toEqual(['thing.saved', 'workflow.completed'])
-    expect(events.map((event) => event.id)).toEqual([`${body.runId}:0`, `${body.runId}:1`])
+    expect(events.map((event) => event.id)).toEqual([`${body.runId}:0`, `${body.runId}:completed`])
     expect(events.every((event) => event.dispatched_at !== null)).toBe(true)
   })
 
@@ -106,7 +106,7 @@ describe('an inline run inside a worker', () => {
       'select id, type from delivered order by id',
     )
     expect(delivered.map((row) => row.type)).toEqual(['thing.saved', 'workflow.completed'])
-    expect(delivered.map((row) => row.id)).toEqual([`${body.runId}:0`, `${body.runId}:1`])
+    expect(delivered.map((row) => row.id)).toEqual([`${body.runId}:0`, `${body.runId}:completed`])
   })
 
   // An instance still sleeping when the runtime is torn down is a request that never answers,

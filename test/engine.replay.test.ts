@@ -90,7 +90,7 @@ describe('a durable run re-invoked for the same run id', () => {
     expect(first.outbox.map((event) => event.id)).toEqual([
       'run_replayed:0',
       'run_replayed:1',
-      'run_replayed:2',
+      'run_replayed:completed',
     ])
   })
 })
@@ -99,6 +99,12 @@ describe('a durable run re-invoked for the same run id', () => {
 // platform invokes the body again. The finish runs a second time — and has to write exactly
 // what the first one would have written, or the consumer sees a second copy of every event
 // under ids it has never seen before.
+/*
+ * These runs have no record in the journal — a run whose row has been swept away — so the entry
+ * guard cannot see that they closed and the body genuinely walks again. That is the case where
+ * deterministic ids are the only thing standing between a consumer and a second copy of every
+ * event. The case where the record IS there is covered by test/formal-f1.test.ts.
+ */
 describe('a durable run re-invoked after its finish was lost', () => {
   const driveTwiceWithLostFinish = async (harness: ReturnType<typeof createTestRuntime>) =>
     driveTwice(harness, { neverCache: ['finish-run', 'emit-events'] })
@@ -132,7 +138,7 @@ describe('a durable run re-invoked after its finish was lost', () => {
 
     const [first, second] = harness.finishes.map((finish) => finish.events.map((event) => event.id))
 
-    expect(first).toEqual(['run_replayed:0', 'run_replayed:1', 'run_replayed:2'])
+    expect(first).toEqual(['run_replayed:0', 'run_replayed:1', 'run_replayed:completed'])
     expect(second).toEqual(first)
   })
 
@@ -146,7 +152,7 @@ describe('a durable run re-invoked after its finish was lost', () => {
     expect(harness.outbox.map((event) => event.id)).toEqual([
       'run_replayed:0',
       'run_replayed:1',
-      'run_replayed:2',
+      'run_replayed:completed',
     ])
   })
 })

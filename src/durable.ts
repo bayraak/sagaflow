@@ -1,12 +1,46 @@
 import type { DurableWorkflow } from './define.js'
 import { executeRun } from './engine.js'
+import { SagaError, SagaflowError } from './errors.js'
 import { validate } from './schema.js'
 import type {
+  CompensationOutcome,
   DurableWorkflowHandle,
+  RunJournal,
   StandardSchemaV1,
   StepPrimitive,
   WorkflowRuntime,
 } from './types.js'
+
+type Entry = { closed: false } | { closed: true; status: string; output: unknown }
+
+/*
+ * What the platform is allowed to run, before it runs anything.
+ *
+ * A durable instance can be invoked again for a run that has already been closed — the finish
+ * batch commits, the instance dies before the platform checkpoints `finish-run`, and the next
+ * invocation starts from the top. Replaying memoised steps is harmless; walking PAST the point
+ * where the first invocation stopped is not, and the body can, because a memoised step never
+ * calls `recordStep` and so never re-reads the cancellation flag that stopped it.
+ *
+ * So the run is read once, at the top of every durable invocation. One read; none at all for an
+ * inline run, which cannot be re-invoked. A journal that cannot read a run back is not blocked
+ * from working — the guard is skipped, and the residual is documented.
+ */
+const entryStateOf = async (
+  journal: RunJournal,
+  tenantId: string,
+  runId: string,
+): Promise<Entry> => {
+  if (!journal.getRun) return { closed: false }
+
+  const run = await journal.getRun({ tenantId, runId })
+
+  // No record is not a closed record. A run whose row has been swept away is not a run that
+  // ended; refusing to carry it out would be inventing an outcome nobody wrote down.
+  if (!run || run.status === 'running') return { closed: false }
+
+  return { closed: true, status: run.status, output: run.output }
+}
 
 /**
  * The same body the inline executor would run, driven through a durable platform's step
@@ -23,6 +57,26 @@ export const executeDurable = async <
   ctx: Ctx,
   step: StepPrimitive,
 ): Promise<Output> => {
+  const entry = await entryStateOf(ctx.journal, ctx.tenantId, params.runId)
+
+  if (entry.closed) {
+    // A run that completed answers with what it decided. Anything else already has an outcome
+    // written down, and this invocation is not going to improve on it.
+    if (entry.status === 'completed') return entry.output as Output
+
+    throw new SagaError({
+      runId: params.runId,
+      workflowName: definition.name,
+      failedStep: null,
+      outcome: entry.status as CompensationOutcome,
+      compensated: [],
+      failedCompensations: [],
+      cause: new SagaflowError(
+        `run ${params.runId} was already ${entry.status} when this invocation began`,
+      ),
+    })
+  }
+
   const parsed = await validate(definition.input, params.input, `the input of ${definition.name}`)
 
   return executeRun<Ctx, Output>({
