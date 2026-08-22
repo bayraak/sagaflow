@@ -25,7 +25,7 @@ export type RegisteredWorkflow<Ctx extends WorkflowRuntime> = {
    */
   start: (
     env: DurableWorkflowEnv,
-    options: { input: unknown; ctx: Ctx; replayOf?: string },
+    options: { input: unknown; ctx: Ctx; replayOf?: string; parentRunId?: string | null },
   ) => Promise<{ runId: string; deduplicated: boolean }>
 }
 

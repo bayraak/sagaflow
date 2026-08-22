@@ -13,6 +13,7 @@ export type MemoryRunRow = {
   name: string
   execution: WorkflowExecution
   idempotencyKey: string | null
+  parentRunId: string | null
   input: unknown
   status: RunStatus
   cancelRequested: boolean
@@ -77,7 +78,14 @@ export const createMemoryJournal = (options: { now?: () => number } = {}) => {
       if (claimed) throw new Error('the idempotency key is already held')
 
       const id = `run_${runs.length + 1}`
-      runs.push({ id, status: 'running', cancelRequested: false, startedAt: now(), ...params })
+      runs.push({
+        id,
+        status: 'running',
+        cancelRequested: false,
+        startedAt: now(),
+        ...params,
+        parentRunId: params.parentRunId ?? null,
+      })
 
       return id
     },

@@ -23,7 +23,11 @@ export type InlineWorkflow<Ctx extends WorkflowRuntime, Input extends StandardSc
   output?: StandardSchemaV1
   idempotency?: (input: StandardSchemaV1.InferOutput<Input>) => string
   body: (input: StandardSchemaV1.InferOutput<Input>, wf: WorkflowHandle<Ctx>) => Promise<Output>
-  run: (options: { input: unknown; ctx: Ctx }) => Promise<InlineRunResult<Output>>
+  run: (options: {
+    input: unknown
+    ctx: Ctx
+    parentRunId?: string | null
+  }) => Promise<InlineRunResult<Output>>
 }
 
 export type DurableWorkflow<Ctx extends WorkflowRuntime, Input extends StandardSchemaV1, Output> = {
@@ -116,7 +120,7 @@ export function defineWorkflow<Ctx extends WorkflowRuntime, Input extends Standa
     output: config.output,
     idempotency: config.idempotency,
     body: inlineBody,
-    run: async ({ input, ctx }) => {
+    run: async ({ input, ctx, parentRunId }) => {
       // Validation first, and the run record only after it passes: an input the schema
       // refuses never becomes a run that somebody has to explain.
       const parsed = await validate(config.input, input, `the input of ${config.name}`)
@@ -130,6 +134,7 @@ export function defineWorkflow<Ctx extends WorkflowRuntime, Input extends Standa
           execution: 'inline',
           idempotencyKey,
           input: parsed,
+          parentRunId: parentRunId ?? null,
         })
       } catch (error) {
         // The journal refusing the key IS the dedup signal: the first run already claimed it,

@@ -42,7 +42,7 @@ export const startDurableWorkflow = async <
 >(
   env: DurableWorkflowEnv,
   definition: DurableWorkflow<Ctx, Input, Output>,
-  options: { input: unknown; ctx: Ctx; replayOf?: string },
+  options: { input: unknown; ctx: Ctx; replayOf?: string; parentRunId?: string | null },
 ): Promise<{ runId: string; deduplicated: boolean }> => {
   const { ctx } = options
   const parsed = await validate(definition.input, options.input, `the input of ${definition.name}`)
@@ -72,6 +72,7 @@ export const startDurableWorkflow = async <
       execution: 'durable',
       idempotencyKey,
       input: parsed,
+      parentRunId: options.parentRunId ?? null,
       ...(options.replayOf === undefined ? {} : { replayOf: options.replayOf }),
     })
   } catch (error) {

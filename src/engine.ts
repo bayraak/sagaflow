@@ -34,7 +34,7 @@ export type StepRunner = <Output>(
   run: (ctx: { attempt: number }) => Promise<Output>,
 ) => Promise<Output>
 
-type Undo = { name: string; config: StepRetryConfig; run: () => Promise<void> }
+type Undo = { seq: number; name: string; config: StepRetryConfig; run: () => Promise<void> }
 
 export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   name: string
@@ -156,6 +156,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
       const compensateWith = result.compensateWith
       if (compensate && compensateWith !== undefined) {
         undos.push({
+          seq: current,
           name: step.name,
           config: step.config,
           // Undoing a charge is a refund, not the charge again: a different side effect, and
@@ -182,16 +183,20 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     },
   }
 
-  // Backwards, because a saga undoes what it did in the order it did it — and every undo is
-  // attempted even when an earlier one refuses, so no completed step is left standing just
-  // because its neighbour could not be reversed.
+  /*
+   * Backwards, by the order the steps were STARTED in — which under concurrency is not the
+   * order they finished in, and the difference matters. Completion order is not stable across a
+   * durable re-invocation: a replayed step comes back from the journal instantly, so steps
+   * complete in the order they were called and the same body would unwind one way the first
+   * time and another way the second. Start order is a property of the body.
+   *
+   * Every undo is attempted even when an earlier one refuses, so no completed step is left
+   * standing just because its neighbour could not be reversed.
+   */
   const compensate = async (): Promise<'compensated' | 'failed'> => {
     let outcome: 'compensated' | 'failed' = 'compensated'
 
-    for (let index = undos.length - 1; index >= 0; index -= 1) {
-      const undo = undos[index]
-      if (!undo) continue
-
+    for (const undo of undos.toSorted((left, right) => right.seq - left.seq)) {
       const current = seq
       seq += 1
 

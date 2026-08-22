@@ -115,6 +115,12 @@ export type RunJournal = {
     input: unknown
     /** The run this one was started to do again, when it is one. Null for nearly every run. */
     replayOf?: string | null
+    /**
+     * The run this one was started from, when a step started it. Provenance and nothing more:
+     * without it a child run is an orphan in the table and nobody can answer "what caused
+     * this?". The engine reads no meaning into it, walks no tree and enforces no rule.
+     */
+    parentRunId?: string | null
   }) => Promise<string>
   /**
    * Idempotent on `(runId, seq, attempt)` — a retried step writes one row, not two.

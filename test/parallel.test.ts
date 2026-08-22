@@ -7,13 +7,14 @@ import {
   type DurableWorkflowHandle,
   type WorkflowHandle,
 } from '../src/index'
-import { passThroughPrimitive } from './helpers/primitive'
+import { createCachingPrimitive, passThroughPrimitive } from './helpers/primitive'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
 import { markInput, markStep } from './helpers/steps'
 
-// A gate, so the order the steps FINISH in is the opposite of the order the body asked for
-// them. Without it a suite cannot tell "undone in reverse completion order" apart from
-// "undone in reverse definition order", and those are different promises.
+// A gate, so the order the steps FINISH in is the opposite of the order they were STARTED in.
+// Without it a suite cannot tell those two orders apart, and the difference is the whole
+// promise: completion order is not stable across a durable re-invocation, because cached steps
+// complete in the order they were called.
 const createGate = () => {
   let open!: () => void
   const passed = new Promise<void>((resolve) => (open = resolve))
@@ -88,9 +89,12 @@ describe('steps a body runs at the same time', () => {
     ])
   })
 
-  // Reverse COMPLETION order, not reverse definition order. A saga undoes what it did in the
-  // order it actually did it, and with concurrency those two orders come apart.
-  it('undoes the one that finished last, first', async () => {
+  // Reverse START order. The obvious alternative — reverse completion order — is not stable
+  // across a durable re-invocation: replayed steps complete instantly in the order they were
+  // called, so the same body would unwind one way on the first invocation and another way on
+  // the second. Start order is a property of the body; completion order is a property of the
+  // weather.
+  it('undoes the one that started last, first', async () => {
     const harness = createTestRuntime()
     const { slow, quick } = gatedSteps()
 
@@ -108,8 +112,8 @@ describe('steps a body runs at the same time', () => {
       'invoke:slow',
       'invoke:quick',
       'invoke:boom',
-      'compensate:slow',
       'compensate:quick',
+      'compensate:slow',
     ])
   })
 
@@ -136,8 +140,43 @@ describe('steps a body runs at the same time', () => {
       'invoke:slow',
       'invoke:quick',
       'invoke:boom',
-      'compensate:slow',
       'compensate:quick',
+      'compensate:slow',
+    ])
+  })
+
+  // The reason for start order, stated as a test: drive the very same body twice through a
+  // platform that memoises what it has already done, and the unwinding has to look identical
+  // both times. Under completion order it would not — on the replay the gated step comes back
+  // from the journal first, so it would finish first and be undone last.
+  it('unwinds identically when the same run is invoked again', async () => {
+    const harness = createTestRuntime()
+    const { slow, quick } = gatedSteps()
+    const platform = createCachingPrimitive({ neverCache: ['boom', 'finish-run'] })
+
+    const workflow = defineWorkflow(
+      { name: 'test.parallel-replay', input: markInput, execution: 'durable' },
+      async (input: { mark: string }, wf: DurableWorkflowHandle<TestRuntime>) => {
+        await Promise.all([wf.step(slow, input), wf.step(quick, input)])
+        await wf.step(markStep('boom', { fails: true }), input)
+      },
+    )
+
+    const unwindings: string[][] = []
+    for (let invocation = 0; invocation < 2; invocation += 1) {
+      const before = platform.calls.length
+      await executeDurable(
+        workflow,
+        { runId: 'run_parallel_replay', input: { mark: 'x' } },
+        harness.ctx,
+        platform.primitive(),
+      ).catch(() => undefined)
+      unwindings.push(platform.calls.slice(before).filter((name) => name.startsWith('compensate:')))
+    }
+
+    expect(unwindings).toEqual([
+      ['compensate:quick', 'compensate:slow'],
+      ['compensate:quick', 'compensate:slow'],
     ])
   })
 })
