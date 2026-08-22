@@ -285,6 +285,14 @@ export type RunObserver = {
    * tree is a different question and its answer belongs in a trace: these two hooks are where an
    * OpenTelemetry span or a run view gets it.
    */
+  /**
+   * How big a step's output was, once serialised.
+   *
+   * Declaring this hook is what makes the engine measure at all: it costs a serialisation per
+   * step, and nobody pays for it unless they asked to be told. `sizeGuard()` is the ready-made
+   * one.
+   */
+  onStepOutput?(fact: { runId: string; name: string; seq: number; bytes: number }): void
   onSpanStart?(fact: { runId: string; name: string; args: string }): void
   onSpanEnd?(fact: {
     runId: string

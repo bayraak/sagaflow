@@ -38,6 +38,17 @@ export type StepRunner = <Output>(
   run: (ctx: { attempt: number }) => Promise<Output>,
 ) => Promise<Output>
 
+/** Null when the value cannot be serialised — which the platform will complain about anyway. */
+const serialisedSize = (value: unknown): number | null => {
+  try {
+    const rendered = JSON.stringify(value)
+
+    return rendered === undefined ? 0 : new TextEncoder().encode(rendered).length
+  } catch {
+    return null
+  }
+}
+
 // An observability backend having a bad day is not a reason to refuse somebody's invoice, so
 // whatever a hook throws is swallowed here and nowhere else has to think about it.
 const watch = <Fact>(hook: ((fact: Fact) => void) | undefined, fact: () => Fact): void => {
@@ -190,6 +201,21 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
           output: produced,
         })
         cancellationRequested = recorded.cancellationRequested
+
+        // Measured only when somebody is listening: serialising every step's output to count
+        // its bytes is a real cost, and it buys nothing for a caller who has not asked.
+        if (ctx.observer?.onStepOutput) {
+          const bytes = serialisedSize(produced)
+          if (bytes !== null) {
+            watch(ctx.observer.onStepOutput, () => ({
+              runId,
+              name: recordedName,
+              seq: current,
+              bytes,
+            }))
+          }
+        }
+
         watch(ctx.observer?.onStepEnd, () => ({
           runId,
           name: recordedName,

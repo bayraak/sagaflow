@@ -51,6 +51,7 @@ export {
 } from './outbox.js'
 export type { TryRunResult } from './result.js'
 export { anything, SchemaError } from './schema.js'
+export { sizeGuard, stepOutputLimit } from './size-guard.js'
 export { compensationStepName, defaultStepConfig, reservedStepNames } from './step.js'
 export { abandonedSweepLimit, sweepAbandonedRuns } from './sweep.js'
 export {

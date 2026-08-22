@@ -5,6 +5,7 @@ import { explainRun, type ExplainFormat } from './explain.js'
 import { configureDefault, provideDefaultFactory } from './instance.js'
 import { createInProcessSink, createMemoryJournal } from './memory/index.js'
 import { definitionOf, type AnySaga } from './saga.js'
+import { sizeGuard } from './size-guard.js'
 import { startDurableWorkflow, startDurableWorkflows } from './start.js'
 import type {
   EventSchemaMap,
@@ -91,7 +92,10 @@ const developmentObserver = (): RunObserver => {
     trails.set(runId, [...(trails.get(runId) ?? []), note])
   }
 
+  const guard = sizeGuard()
+
   return {
+    onStepOutput: guard.onStepOutput,
     onStepEnd: (fact) =>
       mark(fact.runId, `${fact.name} ${fact.status === 'completed' ? '✓' : '✗'}`),
     onCompensationEnd: (fact) =>

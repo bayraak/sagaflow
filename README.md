@@ -625,6 +625,16 @@ expect(journal.steps.map((row) => row.name)).toEqual(['reserve', 'charge'])
 expect(sink.sent.map((event) => event.type)).toContain('booking.created')
 ```
 
+In development, `sizeGuard()` warns about a step whose output is too big for a durable platform
+to checkpoint — before the run that finally has a large enough import finds out in production:
+
+```ts
+const flow = sagaflow({ journal, observer: sizeGuard() })
+```
+
+Measuring costs a serialisation per step, so the engine does it only when that hook exists. The
+zero-configuration instance installs it for you.
+
 `createMemoryJournal()` hands back the journal plus the rows it holds — `runs`, `steps`,
 `finishes`, `outbox`, `dispatched` — so a test asserts on what was written rather than on which
 function was called. No clock to stub, no platform to stand up, milliseconds per test.
