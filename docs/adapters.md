@@ -4,11 +4,11 @@ The extension surface is three seams and nothing else. No plugin system, no `wit
 wrapper, no lifecycle hooks to register — an adapter is a small file that implements one
 contract.
 
-| Seam            | Contract                                                                                 | Shipped                                                               | Obvious next                                       |
-| --------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | -------------------------------------------------- |
-| `RunJournal`    | [journal.md](./journal.md)                                                               | `sagaflow/memory`, `sagaflow/sql` + `sagaflow/d1` + `sagaflow/sqlite` | Postgres, libSQL/Turso, Durable Object storage     |
-| `EventSink`     | `{ sendBatch(messages: { body: EventEnvelope }[]): Promise<unknown> }`                   | a Cloudflare Queue binding **is** one; `createMemorySink`             | SQS, pg-boss, an in-process bus                    |
-| `StepPrimitive` | `{ do(name, config, fn), sleep(name, duration), waitForEvent(name, { type, timeout }) }` | `sagaflow/cloudflare`                                                 | Inngest, Restate, Temporal, Vercel Workflow DevKit |
+| Seam            | Contract                                                                                 | Shipped                                                                                          | Obvious next                                       |
+| --------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| `RunJournal`    | [journal.md](./journal.md)                                                               | `@bayraak/sagaflow/memory`, `@bayraak/sagaflow/sql` + `sagaflow/d1` + `@bayraak/sagaflow/sqlite` | Postgres, libSQL/Turso, Durable Object storage     |
+| `EventSink`     | `{ sendBatch(messages: { body: EventEnvelope }[]): Promise<unknown> }`                   | a Cloudflare Queue binding **is** one; `createMemorySink`                                        | SQS, pg-boss, an in-process bus                    |
+| `StepPrimitive` | `{ do(name, config, fn), sleep(name, duration), waitForEvent(name, { type, timeout }) }` | `@bayraak/sagaflow/cloudflare`                                                                   | Inngest, Restate, Temporal, Vercel Workflow DevKit |
 
 Framework glue is deliberately _not_ a seam. Resolving the tenant and the actor is always the
 application's job, so integration stays recipes rather than middleware.
@@ -115,10 +115,10 @@ The Cloudflare adapter is about forty lines. Inngest's `step.run` / `step.sleep`
 
 ## Proving a journal
 
-Do not write your own suite. `sagaflow/testing` exports the contract as an executable one:
+Do not write your own suite. `@bayraak/sagaflow/testing` exports the contract as an executable one:
 
 ```ts
-import { journalConformance } from 'sagaflow/testing'
+import { journalConformance } from '@bayraak/sagaflow/testing'
 
 const cases = journalConformance(() => ({
   journal: createMyJournal(store),

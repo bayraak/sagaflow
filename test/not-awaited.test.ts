@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
-import { saga, sagaflow, SagaflowError, step } from 'sagaflow'
-import { createMemoryJournal } from 'sagaflow/memory'
+import { saga, sagaflow, SagaflowError, step } from '@bayraak/sagaflow'
+import { createMemoryJournal } from '@bayraak/sagaflow/memory'
 
 // Every verb returns a promise and every example awaits one, so a missing `await` is a typo
 // rather than a style choice — and a typo that would otherwise let a run be written down as

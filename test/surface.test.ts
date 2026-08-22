@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
-import { saga, sagaflow, step } from 'sagaflow'
-import { createMemoryJournal, createMemorySink } from 'sagaflow/memory'
+import { saga, sagaflow, step } from '@bayraak/sagaflow'
+import { createMemoryJournal, createMemorySink } from '@bayraak/sagaflow/memory'
 import { z } from 'zod'
 
 // The README's first screen, compiled and run. If this is not the shortest honest way to write a

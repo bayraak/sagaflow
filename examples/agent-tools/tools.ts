@@ -1,5 +1,5 @@
-import { action, saga, sagaflow, step } from 'sagaflow'
-import { createMemoryJournal } from 'sagaflow/memory'
+import { action, saga, sagaflow, step } from '@bayraak/sagaflow'
+import { createMemoryJournal } from '@bayraak/sagaflow/memory'
 import { z } from 'zod'
 
 /*
@@ -80,7 +80,7 @@ export const settleRefund = saga(
 )
 
 const waitForApproval = async (refundId: string): Promise<{ approved: boolean }> => {
-  const { waitForEvent } = await import('sagaflow')
+  const { waitForEvent } = await import('@bayraak/sagaflow')
 
   return waitForEvent<{ approved: boolean }>(`approval-${refundId}`, {
     type: 'refund.approved',

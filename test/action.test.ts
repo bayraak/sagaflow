@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
-import { action, attempt, idempotencyKey, saga, sagaflow, step } from 'sagaflow'
-import { createMemoryJournal } from 'sagaflow/memory'
+import { action, attempt, idempotencyKey, saga, sagaflow, step } from '@bayraak/sagaflow'
+import { createMemoryJournal } from '@bayraak/sagaflow/memory'
 
 async function chargeCard(amount: number) {
   return { chargeId: `ch_${amount}` }

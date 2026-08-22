@@ -1,4 +1,4 @@
-import { entrypointFor, workerFor } from 'sagaflow/cloudflare'
+import { entrypointFor, workerFor } from '@bayraak/sagaflow/cloudflare'
 
 import { chaseBooking, createBooking, flow } from './sagas.js'
 

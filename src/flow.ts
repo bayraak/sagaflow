@@ -103,7 +103,7 @@ const developmentObserver = (): RunObserver => {
 const notDurable =
   'sagaflow is running with no journal, so its state is in memory and not durable. ' +
   'Everything is lost when this process exits and nothing is shared between processes. ' +
-  'Pass a journal — sagaflow/d1 or sagaflow/sqlite — before this goes anywhere real.'
+  'Pass a journal — @bayraak/sagaflow/d1 or @bayraak/sagaflow/sqlite — before this goes anywhere real.'
 
 /**
  * Configure sagaflow once.

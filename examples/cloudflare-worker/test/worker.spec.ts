@@ -1,5 +1,5 @@
+import { instanceIdFor } from '@bayraak/sagaflow'
 import { env, SELF } from 'cloudflare:test'
-import { instanceIdFor } from 'sagaflow'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ddl from '../migrations/0001_sagaflow.sql?raw'

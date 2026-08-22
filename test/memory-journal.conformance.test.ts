@@ -1,7 +1,7 @@
 import { describe, it } from 'bun:test'
 
-import { createMemoryJournal } from 'sagaflow/memory'
-import { journalConformance } from 'sagaflow/testing'
+import { createMemoryJournal } from '@bayraak/sagaflow/memory'
+import { journalConformance } from '@bayraak/sagaflow/testing'
 
 // The memory journal is a real subject of the contract, not a convenience that gets a pass.
 // Every rule the D1 and SQLite adapters have to keep, it keeps.

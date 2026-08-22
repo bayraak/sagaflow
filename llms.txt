@@ -10,7 +10,7 @@ deduplicated by a deterministic id. The same definition runs inline inside the r
 on a workflow engine.
 
 ```ts
-import { saga, step, emit } from 'sagaflow'
+import { saga, step, emit } from '@bayraak/sagaflow'
 
 const createBooking = saga('booking.create', async (input: { seat: string }) => {
   const seat = await step('reserve', () => seats.reserve(input.seat), (r) => seats.release(r.id))

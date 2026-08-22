@@ -1,7 +1,7 @@
 # sagaflow
 
 [![CI](https://github.com/bayraak/sagaflow/actions/workflows/ci.yml/badge.svg)](https://github.com/bayraak/sagaflow/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/sagaflow.svg)](https://www.npmjs.com/package/sagaflow)
+[![npm](https://img.shields.io/npm/v/@bayraak/sagaflow.svg)](https://www.npmjs.com/package/@bayraak/sagaflow)
 [![license](https://img.shields.io/npm/l/sagaflow.svg)](./LICENSE)
 
 **An embedded saga engine for TypeScript. Workflows that undo themselves, leave a record, and
@@ -33,11 +33,11 @@ you were about to write, and the `await queue.send()` on the line after the comm
 ## Sixty seconds
 
 ```bash
-bun add sagaflow    # or: npm i sagaflow / pnpm add sagaflow
+bun add @bayraak/sagaflow    # or: npm i @bayraak/sagaflow / pnpm add @bayraak/sagaflow
 ```
 
 ```ts
-import { saga, step, emit } from 'sagaflow'
+import { saga, step, emit } from '@bayraak/sagaflow'
 
 const createBooking = saga('booking.create', async (input: { seat: string }) => {
   const seat = await step(
@@ -60,7 +60,7 @@ Effects usually arrive through one object — a queries module, a service, a bin
 and every body that uses it is plain code:
 
 ```ts
-import { actions } from 'sagaflow'
+import { actions } from '@bayraak/sagaflow'
 
 export const seats = actions(seatService, {
   reserve: {
@@ -94,7 +94,7 @@ run that needed it most is the one that cannot be taken back. Write it once, bes
 reverses:
 
 ```ts
-import { action } from 'sagaflow'
+import { action } from '@bayraak/sagaflow'
 
 export const reserveSeat = action(seats.reserve, { undo: (held) => seats.release(held.id) })
 export const chargeCard = action(cards.charge, { undo: (receipt) => cards.refund(receipt.id) })
@@ -119,8 +119,8 @@ written down atomically with the run and delivered afterwards. It runs with noth
 in memory, with one line telling you so. When you are ready:
 
 ```ts
-import { sagaflow } from 'sagaflow'
-import { createSqliteJournal } from 'sagaflow/sqlite'
+import { sagaflow } from '@bayraak/sagaflow'
+import { createSqliteJournal } from '@bayraak/sagaflow/sqlite'
 
 const flow = sagaflow({ journal: createSqliteJournal(db), events: queue })
 
@@ -294,7 +294,7 @@ durable one has `.start()` and no call signature worth using, and only a durable
 or wait:
 
 ```ts
-import { saga, sleep, step, waitForEvent } from 'sagaflow'
+import { saga, sleep, step, waitForEvent } from '@bayraak/sagaflow'
 
 const chaseInvoice = saga(
   'invoice.chase',
@@ -517,7 +517,7 @@ Delivery is at-least-once. Run `sweepEventOutbox` on a schedule for whatever a r
 could not deliver, and dedupe on the envelope id at the consumer.
 
 ```ts
-import { sweepAbandonedRuns, sweepEventOutbox } from 'sagaflow'
+import { sweepAbandonedRuns, sweepEventOutbox } from '@bayraak/sagaflow'
 
 await sweepEventOutbox({ journal, sink })
 await sweepAbandonedRuns({ journal, olderThanMs: 15 * 60_000 })
@@ -534,11 +534,11 @@ asleep for a week.
 sagaflow writes three tables through whatever already talks to your database. Bring your ORM's
 executor; we bring the SQL.
 
-| Adapter       | Import            | For                                                  |
-| ------------- | ----------------- | ---------------------------------------------------- |
-| Memory        | `sagaflow/memory` | tests, and the worked reference for writing your own |
-| Cloudflare D1 | `sagaflow/d1`     | Workers                                              |
-| SQLite        | `sagaflow/sqlite` | `bun:sqlite` / `node:sqlite`                         |
+| Adapter       | Import                     | For                                                  |
+| ------------- | -------------------------- | ---------------------------------------------------- |
+| Memory        | `@bayraak/sagaflow/memory` | tests, and the worked reference for writing your own |
+| Cloudflare D1 | `@bayraak/sagaflow/d1`     | Workers                                              |
+| SQLite        | `@bayraak/sagaflow/sqlite` | `bun:sqlite` / `node:sqlite`                         |
 
 The contract is nine methods ([`docs/journal.md`](./docs/journal.md)); an adapter is a small file.
 The default tables are `saga_runs`, `saga_run_steps` and `saga_outbox`, and their names are
@@ -551,7 +551,7 @@ configurable — sagaflow does not own your schema, your migration tool does. Se
 
 ### Inline, anywhere
 
-1. `bun add sagaflow`
+1. `bun add @bayraak/sagaflow`
 2. Apply the DDL with your own migration tool.
 3. Build a runtime per request: `{ tenantId, journal, events? }`.
 4. Call `workflow.run({ input, ctx })` in your handler.
@@ -595,7 +595,7 @@ environments inherit nothing** — repeat every binding in every environment blo
 A saga is an async function, so testing one is calling it:
 
 ```ts
-import { createMemoryJournal, createMemorySink } from 'sagaflow/memory'
+import { createMemoryJournal, createMemorySink } from '@bayraak/sagaflow/memory'
 
 const journal = createMemoryJournal()
 const sink = createMemorySink()
@@ -629,7 +629,7 @@ A fake that caches results by name reproduces exactly what a real platform does 
 re-invocation; one that calls `run` more than once reproduces retries.
 
 Writing a journal adapter? Do not write your own suite — `journalConformance` from
-`sagaflow/testing` is the contract as thirty-five executable cases, runnable under any test
+`@bayraak/sagaflow/testing` is the contract as thirty-five executable cases, runnable under any test
 runner.
 
 ## Versioning law

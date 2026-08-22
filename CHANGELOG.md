@@ -6,6 +6,9 @@ the major version is `0`, a minor bump may contain a breaking change and a patch
 
 ## 0.1.0 — unreleased
 
+Published as **`@bayraak/sagaflow`** — the unscoped name is reserved by npm's similarity
+rule. The library, the repository and everything you type in a body are still `sagaflow`.
+
 First release. The engine is extracted from a production backend where it runs every domain
 mutation, and every gap found while reviewing it for extraction is closed here rather than
 shipped.
@@ -13,7 +16,7 @@ shipped.
 ### The surface
 
 ```ts
-import { saga, step, emit } from 'sagaflow'
+import { saga, step, emit } from '@bayraak/sagaflow'
 
 const createBooking = saga('booking.create', async (input: { seat: string }) => {
   const seat = await step(
@@ -61,8 +64,8 @@ for what they cost.
 
 ### Adapters
 
-`sagaflow/memory`, `sagaflow/sql` (with `sagaflow/d1` and `sagaflow/sqlite`),
-`sagaflow/cloudflare`, and `sagaflow/testing` — whose `journalConformance` is the journal
+`@bayraak/sagaflow/memory`, `@bayraak/sagaflow/sql` (with `sagaflow/d1` and `@bayraak/sagaflow/sqlite`),
+`@bayraak/sagaflow/cloudflare`, and `@bayraak/sagaflow/testing` — whose `journalConformance` is the journal
 contract as thirty-five executable cases that any adapter, in any test runner, can prove itself
 against.
 

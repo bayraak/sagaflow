@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'bun:test'
 
-import { action, actions, saga, sagaflow, step, type RunObserver, type UndoSpec } from 'sagaflow'
-import { createMemoryJournal } from 'sagaflow/memory'
+import {
+  action,
+  actions,
+  saga,
+  sagaflow,
+  step,
+  type RunObserver,
+  type UndoSpec,
+} from '@bayraak/sagaflow'
+import { createMemoryJournal } from '@bayraak/sagaflow/memory'
 
 // The rule is "every effect is a step". A rule you have to remember at every call site is a rule
 // somebody forgets on a Friday — so when effects are reached through one object, wrap the object

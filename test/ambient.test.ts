@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
-import { ctx, emit, runId, saga, sagaflow, step } from 'sagaflow'
-import { createMemoryJournal, createMemorySink } from 'sagaflow/memory'
+import { ctx, emit, runId, saga, sagaflow, step } from '@bayraak/sagaflow'
+import { createMemoryJournal, createMemorySink } from '@bayraak/sagaflow/memory'
 
 // The README's first screen. No handle, no instance argument, no ceremony — the verbs are
 // imported and they know which saga they are in.

@@ -3,8 +3,8 @@ import { describe, it } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
-import { createSqliteJournal } from 'sagaflow/sqlite'
-import { journalConformance } from 'sagaflow/testing'
+import { createSqliteJournal } from '@bayraak/sagaflow/sqlite'
+import { journalConformance } from '@bayraak/sagaflow/testing'
 
 const ddl = readFileSync(path.join(import.meta.dirname, '../src/sql/schema.sql'), 'utf8')
 
