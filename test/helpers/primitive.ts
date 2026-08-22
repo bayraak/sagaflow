@@ -68,15 +68,22 @@ export const createRetryingPrimitive = (options: { attempts: number }): StepPrim
  * being executed. The clone is not decoration — a real journal round-trips the value through
  * serialisation, and anything the engine expects to get back has to survive that.
  */
-export const createCachingPrimitive = (options: { neverCache?: string[] } = {}) => {
+export const createCachingPrimitive = (
+  options: { neverCache?: string[]; crashOnce?: string[] } = {},
+) => {
   const cache = new Map<string, unknown>()
   const calls: string[] = []
   const executed: string[] = []
+  const pendingCrashes = new Set(options.crashOnce ?? [])
 
   const primitive = (): StepPrimitive => ({
     do: async (name, _config, run) => {
       calls.push(name)
       if (cache.has(name)) return cache.get(name) as never
+      // The isolate dies on the way INTO a step: the work never happens, nothing is
+      // checkpointed, and the next invocation reaches the same step with the journal in
+      // whatever state the last one left it. Once, so the retry can get further.
+      if (pendingCrashes.delete(name)) throw new Error(`the instance died before '${name}'`)
 
       executed.push(name)
       const output = await run({ attempt: 1 })

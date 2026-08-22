@@ -81,6 +81,11 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   runner: StepRunner
   invoke: (handle: WorkflowHandle<Ctx>) => Promise<Output>
   output?: StandardSchemaV1
+  /**
+   * Compensation step names this run has already recorded as refused, read from the trail
+   * before the invocation began. Empty for an inline run, which cannot be re-invoked.
+   */
+  refused?: ReadonlySet<string>
 }): Promise<Output> => {
   const { name, runId, ctx, runner, invoke } = options
   const held: EventEnvelope[] = []
@@ -390,6 +395,22 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     for (const undo of undos.toSorted((left, right) => right.seq - left.seq)) {
       const current = seq
       seq += 1
+
+      /*
+       * An undo this run already refused is not tried again.
+       *
+       * Trying it again sounds generous and is not. A refused undo is not checkpointed, so a
+       * re-invocation would reach it after the undos that came later in reverse order have
+       * already succeeded and been memoised — and if the retry worked, the run would close
+       * `compensated`, which tells a reader it was unwound in reverse start order when it was
+       * not. The refusal is a fact about the run, and it is final: the run is `failed`, which
+       * says truthfully that something was left standing and somebody has to look.
+       */
+      if (options.refused?.has(compensationStepName(undo.name))) {
+        outcome = 'failed'
+        failedCompensations.push(undo.name)
+        continue
+      }
 
       try {
         await runner(compensationStepName(undo.name), undo.config, async ({ attempt }) => {

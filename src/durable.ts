@@ -2,6 +2,7 @@ import type { DurableWorkflow } from './define.js'
 import { executeRun } from './engine.js'
 import { SagaError, SagaflowError } from './errors.js'
 import { validate } from './schema.js'
+import { compensationPrefix } from './step.js'
 import type {
   CompensationOutcome,
   DurableWorkflowHandle,
@@ -42,6 +43,30 @@ const entryStateOf = async (
   return { closed: true, status: run.status, output: run.output }
 }
 
+/*
+ * The undos this run has already recorded as refused.
+ *
+ * A refused undo is not checkpointed by the platform, so without this the next invocation
+ * simply tries it again — after the undos that came later in reverse order have already
+ * succeeded. One read, next to the entry guard's, and skipped by a journal that cannot read a
+ * trail back: such a journal keeps the older behaviour, and the residual is documented.
+ */
+const refusedCompensationsOf = async (
+  journal: RunJournal,
+  tenantId: string,
+  runId: string,
+): Promise<ReadonlySet<string>> => {
+  if (!journal.listRunSteps) return new Set()
+
+  const trail = await journal.listRunSteps({ tenantId, runId })
+
+  return new Set(
+    trail
+      .filter((entry) => entry.status === 'failed' && entry.name.startsWith(compensationPrefix))
+      .map((entry) => entry.name),
+  )
+}
+
 /**
  * The same body the inline executor would run, driven through a durable platform's step
  * primitives instead of straight through. The run record was opened by `startDurableWorkflow`
@@ -77,9 +102,11 @@ export const executeDurable = async <
     })
   }
 
+  const refused = await refusedCompensationsOf(ctx.journal, ctx.tenantId, params.runId)
   const parsed = await validate(definition.input, params.input, `the input of ${definition.name}`)
 
   return executeRun<Ctx, Output>({
+    refused,
     name: definition.name,
     runId: params.runId,
     ctx,
