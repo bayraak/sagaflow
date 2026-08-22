@@ -31,6 +31,18 @@ export type StepRunner = <Output>(
   run: (ctx: { attempt: number }) => Promise<Output>,
 ) => Promise<Output>
 
+// An observability backend having a bad day is not a reason to refuse somebody's invoice, so
+// whatever a hook throws is swallowed here and nowhere else has to think about it.
+const watch = <Fact>(hook: ((fact: Fact) => void) | undefined, fact: () => Fact): void => {
+  if (!hook) return
+
+  try {
+    hook(fact())
+  } catch {
+    // deliberately ignored
+  }
+}
+
 type Undo<Ctx> = {
   seq: number
   name: string
@@ -55,6 +67,9 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
   let ordinal = 0
   let failedStep: string | null = null
   let cancelledAfter: string | null = null
+  const startedAt = Date.now()
+
+  watch(ctx.observer?.onRunStart, () => ({ runId, name, tenantId: ctx.tenantId }))
 
   /*
    * Envelope ids are the run and a counter, so the whole set is a function of the run rather
@@ -144,6 +159,13 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
      */
     const result = await runner(step.name, step.config, async ({ attempt }) => {
       const emitted: RawEvent[] = []
+      const stepStartedAt = Date.now()
+      watch(ctx.observer?.onStepStart, () => ({
+        runId,
+        name: step.name,
+        seq: current,
+        attempt,
+      }))
 
       try {
         const produced = await step.run(
@@ -160,6 +182,14 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
           output: produced.output,
         })
         cancellationRequested = recorded.cancellationRequested
+        watch(ctx.observer?.onStepEnd, () => ({
+          runId,
+          name: step.name,
+          seq: current,
+          attempt,
+          status: 'completed' as const,
+          durationMs: Date.now() - stepStartedAt,
+        }))
 
         return { ...produced, events: emitted }
       } catch (error) {
@@ -173,6 +203,14 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
           attempt,
           error: messageOf(error),
         })
+        watch(ctx.observer?.onStepEnd, () => ({
+          runId,
+          name: step.name,
+          seq: current,
+          attempt,
+          status: 'failed' as const,
+          durationMs: Date.now() - stepStartedAt,
+        }))
 
         throw error
       }
@@ -243,6 +281,14 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
 
       try {
         await runner(compensationStepName(undo.name), undo.config, async ({ attempt }) => {
+          const undoStartedAt = Date.now()
+          watch(ctx.observer?.onCompensationStart, () => ({
+            runId,
+            name: undo.name,
+            seq: undo.seq,
+            attempt,
+          }))
+
           try {
             // Undoing a charge is a refund, not the charge again: a different side effect, and
             // so a different key. What an undo emits is dropped with the run it is undoing, so
@@ -259,6 +305,14 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
               status: 'compensated',
               attempt,
             })
+            watch(ctx.observer?.onCompensationEnd, () => ({
+              runId,
+              name: undo.name,
+              seq: undo.seq,
+              attempt,
+              status: 'compensated' as const,
+              durationMs: Date.now() - undoStartedAt,
+            }))
           } catch (error) {
             await ctx.journal.recordStep({
               tenantId: ctx.tenantId,
@@ -269,6 +323,14 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
               attempt,
               error: messageOf(error),
             })
+            watch(ctx.observer?.onCompensationEnd, () => ({
+              runId,
+              name: undo.name,
+              seq: undo.seq,
+              attempt,
+              status: 'failed' as const,
+              durationMs: Date.now() - undoStartedAt,
+            }))
 
             throw error
           }
@@ -335,6 +397,13 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
       }),
     )
 
+    watch(ctx.observer?.onRunEnd, () => ({
+      runId,
+      name,
+      status: outcome,
+      durationMs: Date.now() - startedAt,
+    }))
+
     throw new WorkflowError({
       runId,
       workflowName: name,
@@ -364,6 +433,13 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
       events: held,
     }),
   )
+
+  watch(ctx.observer?.onRunEnd, () => ({
+    runId,
+    name,
+    status: 'completed' as const,
+    durationMs: Date.now() - startedAt,
+  }))
 
   const sink = ctx.events
   if (sink) {

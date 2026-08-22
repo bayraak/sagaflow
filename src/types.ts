@@ -217,6 +217,37 @@ export type LifecycleEventPayloads = {
 }
 
 /**
+ * Plain facts about a run going by, for whoever wants to count or trace them.
+ *
+ * Deliberately plain: no objects from inside the engine, so an adapter for OpenTelemetry, a
+ * metrics counter or a log line cannot come to depend on the engine's shape. Every hook is
+ * optional and every hook is called defensively — an observability backend having a bad day is
+ * not a reason to refuse somebody's invoice, so anything one of these throws is swallowed.
+ */
+export type RunObserver = {
+  onRunStart?(fact: { runId: string; name: string; tenantId: string }): void
+  onStepStart?(fact: { runId: string; name: string; seq: number; attempt: number }): void
+  onStepEnd?(fact: {
+    runId: string
+    name: string
+    seq: number
+    attempt: number
+    status: StepStatus
+    durationMs: number
+  }): void
+  onCompensationStart?(fact: { runId: string; name: string; seq: number; attempt: number }): void
+  onCompensationEnd?(fact: {
+    runId: string
+    name: string
+    seq: number
+    attempt: number
+    status: StepStatus
+    durationMs: number
+  }): void
+  onRunEnd?(fact: { runId: string; name: string; status: RunOutcome; durationMs: number }): void
+}
+
+/**
  * What every step is handed. `events` is optional because a workflow that emits nothing needs
  * no sink; `eventSchemas` is optional because validation is a choice, and declaring the map
  * is what types `emit` to your own event names.
@@ -227,6 +258,7 @@ export type WorkflowRuntime<Events extends EventSchemaMap = EventSchemaMap> = {
   journal: RunJournal
   events?: EventSink
   eventSchemas?: Events
+  observer?: RunObserver
 }
 
 export type EventsOf<Ctx> = Ctx extends { eventSchemas?: infer Events }

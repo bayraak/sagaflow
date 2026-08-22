@@ -50,6 +50,7 @@ export type {
   LifecycleEventPayloads,
   LifecycleEventType,
   RunJournal,
+  RunObserver,
   RunOutcome,
   RunStatus,
   StandardSchemaV1,
