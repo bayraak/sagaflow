@@ -40,11 +40,6 @@ export {
   eventSweepLimit,
   sweepEventOutbox,
 } from './outbox.js'
-export {
-  createDurableRegistry,
-  registerDurableWorkflow,
-  type RegisteredWorkflow,
-} from './registry.js'
 export type { TryRunResult } from './result.js'
 export { anything, SchemaError } from './schema.js'
 export { compensationStepName, defaultStepConfig, reservedStepNames } from './step.js'

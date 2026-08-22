@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 
 import { defineWorkflow } from '../src/define.js'
-import { createDurableRegistry, type DurableWorkflowHandle } from '../src/index.js'
+import type { DurableWorkflowHandle } from '../src/index.js'
+import { createDurableRegistry } from '../src/registry.js'
 import { createLauncher } from './helpers/launcher'
 import { passThroughPrimitive } from './helpers/primitive'
 import { createTestRuntime, type TestRuntime } from './helpers/runtime'
