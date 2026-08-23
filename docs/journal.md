@@ -4,7 +4,7 @@ Nine methods. The shape is checked by TypeScript; the **behaviour** is what the 
 absolutely, and that is what this page is about — and what
 [`journalConformance`](./adapters.md#proving-a-journal) enforces.
 
-Shipped adapters: `@bayraak/sagaflow/memory`, `@bayraak/sagaflow/sql` (with `sagaflow/d1` and `@bayraak/sagaflow/sqlite`
+Shipped adapters: `sagaflow-js/memory`, `sagaflow-js/sql` (with `sagaflow/d1` and `sagaflow-js/sqlite`
 drivers). The reference DDL is [`src/sql/schema.sql`](../src/sql/schema.sql).
 
 ## Getting them in place

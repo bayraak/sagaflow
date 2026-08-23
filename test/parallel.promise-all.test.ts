@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
-import { saga, sagaflow, step } from '@bayraak/sagaflow'
-import { createMemoryJournal } from '@bayraak/sagaflow/memory'
+import { saga, sagaflow, step } from 'sagaflow-js'
+import { createMemoryJournal } from 'sagaflow-js/memory'
 
 const gate = (): { passed: Promise<void>; open: () => void } => {
   let open!: () => void

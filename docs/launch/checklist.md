@@ -32,11 +32,11 @@ Order, because each step is the previous one's proof.
 
 1. [ ] Tag and push `v0.1.0` on the default branch; the CI badge in the README must be green on
        that commit before anything else happens
-2. [ ] `npm publish` — the package is scoped (`@bayraak/sagaflow`), so `publishConfig.access` must
+2. [ ] `npm publish` — the package is scoped (`sagaflow-js`), so `publishConfig.access` must
        be `public` or the publish silently becomes private
-3. [ ] `npm view @bayraak/sagaflow` — confirm the version, the files list and the empty dependency
+3. [ ] `npm view sagaflow-js` — confirm the version, the files list and the empty dependency
        set from the registry rather than from the repository
-4. [ ] In a scratch directory: `bun add @bayraak/sagaflow`, paste the six-line example, run it,
+4. [ ] In a scratch directory: `bun add sagaflow-js`, paste the six-line example, run it,
        then `bunx sagaflow schema` from the same directory. **This is the only check that proves
        the published artifact works**, and it has caught more broken releases than every gate
        above it

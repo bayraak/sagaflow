@@ -5,7 +5,7 @@ One screen. Everything else is [the README](../README.md).
 ## Declare
 
 ```ts
-import { saga, step, emit, action, actions, sagaflow } from '@bayraak/sagaflow'
+import { saga, step, emit, action, actions, sagaflow } from 'sagaflow-js'
 
 const createBooking = saga('booking.create', async (input: { seat: string }) => {
   const seat = await step(
@@ -106,7 +106,7 @@ bunx sagaflow schema > migrations/0001.sql // grown-up path
 ```
 
 `saga_runs`, `saga_run_steps`, `saga_outbox` — rename with `{ tables }`. Writing your own?
-`journalConformance` from `@bayraak/sagaflow/testing` is the contract as executable cases.
+`journalConformance` from `sagaflow-js/testing` is the contract as executable cases.
 
 ## Cloudflare
 

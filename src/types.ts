@@ -104,8 +104,8 @@ export type EventSink = {
 }
 
 /**
- * The run record, as the executors need it. Two adapters ship (`@bayraak/sagaflow/memory`,
- * `@bayraak/sagaflow/d1`); nothing above this seam knows a database exists.
+ * The run record, as the executors need it. Two adapters ship (`sagaflow-js/memory`,
+ * `sagaflow-js/d1`); nothing above this seam knows a database exists.
  */
 export type RunJournal = {
   /**
@@ -440,7 +440,7 @@ export type DurableWorkflowHandle<Ctx> = WorkflowHandle<Ctx> & {
 }
 
 /**
- * The seam over a durable engine's step primitives. `@bayraak/sagaflow/cloudflare` implements it
+ * The seam over a durable engine's step primitives. `sagaflow-js/cloudflare` implements it
  * against a real Cloudflare `WorkflowStep`; a suite implements it against an array of calls.
  * Inngest, Restate and Temporal expose the same three capabilities under other names.
  */

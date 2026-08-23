@@ -1,5 +1,5 @@
-import { action, emit, saga, sagaflow } from '@bayraak/sagaflow'
-import { createInProcessSink, createMemoryJournal } from '@bayraak/sagaflow/memory'
+import { action, emit, saga, sagaflow } from 'sagaflow-js'
+import { createInProcessSink, createMemoryJournal } from 'sagaflow-js/memory'
 import { z } from 'zod'
 
 /*

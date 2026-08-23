@@ -1,5 +1,5 @@
-import { action, saga, sagaflow } from '@bayraak/sagaflow'
-import { createMemoryJournal } from '@bayraak/sagaflow/memory'
+import { action, saga, sagaflow } from 'sagaflow-js'
+import { createMemoryJournal } from 'sagaflow-js/memory'
 import * as v from 'valibot'
 
 /*

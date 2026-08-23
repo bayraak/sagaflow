@@ -20,7 +20,7 @@ process.
 ## Six lines
 
 ```ts
-import { emit, saga, step } from '@bayraak/sagaflow'
+import { emit, saga, step } from 'sagaflow-js'
 
 const createBooking = saga('booking.create', async (input: { seat: string }) => {
   const seat = await step(
@@ -103,7 +103,7 @@ of that takes an afternoon. The sixth takes a year.
 Extracted from a production backend where every mutation is a run. MIT.
 
 **[github.com/bayraak/sagaflow](https://github.com/bayraak/sagaflow)** ·
-`bun add @bayraak/sagaflow`
+`bun add sagaflow-js`
 
 ---
 

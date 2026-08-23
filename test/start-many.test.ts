@@ -7,8 +7,8 @@ import {
   step,
   type StandardSchemaV1,
   type WorkflowLauncher,
-} from '@bayraak/sagaflow'
-import { createMemoryJournal } from '@bayraak/sagaflow/memory'
+} from 'sagaflow-js'
+import { createMemoryJournal } from 'sagaflow-js/memory'
 
 import { definitionOf } from '../src/saga.js'
 

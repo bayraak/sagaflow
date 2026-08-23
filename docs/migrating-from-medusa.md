@@ -235,7 +235,7 @@ await settleRefund.start(input, flow)
 
 A durable definition has `.start()` and no useful call signature, and only a durable body may
 sleep or wait — that is a compile error, not a convention. Waking it is
-`sendWorkflowEvent({ binding, name, runId, event })` from `@bayraak/sagaflow/cloudflare`, which
+`sendWorkflowEvent({ binding, name, runId, event })` from `sagaflow-js/cloudflare`, which
 derives the instance id the same way the launcher did, so an approval endpoint never hand-builds
 one.
 

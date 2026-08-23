@@ -1,4 +1,4 @@
-import { instanceIdFor } from '@bayraak/sagaflow'
+import { instanceIdFor } from 'sagaflow-js'
 import { env, SELF } from 'cloudflare:test'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 

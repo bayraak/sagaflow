@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 
-import { explainRun, saga, sagaflow, step } from '@bayraak/sagaflow'
-import { createMemoryJournal } from '@bayraak/sagaflow/memory'
-import { trailOf } from '@bayraak/sagaflow/testing'
+import { explainRun, saga, sagaflow, step } from 'sagaflow-js'
+import { createMemoryJournal } from 'sagaflow-js/memory'
+import { trailOf } from 'sagaflow-js/testing'
 
 const bookedRun = async (): Promise<{
   journal: ReturnType<typeof createMemoryJournal>

@@ -9,15 +9,15 @@ const packageRoot = path.resolve(import.meta.dirname, '../..')
 // Workflows binding and a real Queue.
 //
 // The aliases exist only because this example lives inside the package's own repository. In your
-// project `@bayraak/sagaflow` is a dependency and there is nothing to alias.
+// project `sagaflow-js` is a dependency and there is nothing to alias.
 export default defineConfig({
   plugins: [cloudflareTest({ wrangler: { configPath: './wrangler.jsonc' } })],
   resolve: {
     alias: {
-      '@bayraak/sagaflow/cloudflare': path.join(packageRoot, 'src/cloudflare/index.ts'),
-      '@bayraak/sagaflow/memory': path.join(packageRoot, 'src/memory/index.ts'),
-      '@bayraak/sagaflow/d1': path.join(packageRoot, 'src/d1/index.ts'),
-      '@bayraak/sagaflow': path.join(packageRoot, 'src/index.ts'),
+      'sagaflow-js/cloudflare': path.join(packageRoot, 'src/cloudflare/index.ts'),
+      'sagaflow-js/memory': path.join(packageRoot, 'src/memory/index.ts'),
+      'sagaflow-js/d1': path.join(packageRoot, 'src/d1/index.ts'),
+      'sagaflow-js': path.join(packageRoot, 'src/index.ts'),
     },
   },
   test: { include: ['test/**/*.spec.ts'], testTimeout: 30_000 },

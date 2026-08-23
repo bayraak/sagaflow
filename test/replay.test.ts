@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
-import { saga, sagaflow, step, type WorkflowLauncher } from '@bayraak/sagaflow'
-import { createMemoryJournal } from '@bayraak/sagaflow/memory'
+import { saga, sagaflow, step, type WorkflowLauncher } from 'sagaflow-js'
+import { createMemoryJournal } from 'sagaflow-js/memory'
 
 const ship = saga(
   'thing.ship-replay',

@@ -7,8 +7,8 @@ bump may contain a breaking change and a **patch** never will. The changelog nam
 
 ## What counts as public
 
-- Everything exported from `sagaflow`, `@bayraak/sagaflow/memory`, `@bayraak/sagaflow/sql`, `sagaflow/d1`,
-  `@bayraak/sagaflow/sqlite`, `@bayraak/sagaflow/testing` and `@bayraak/sagaflow/cloudflare`.
+- Everything exported from `sagaflow`, `sagaflow-js/memory`, `sagaflow-js/sql`, `sagaflow/d1`,
+  `sagaflow-js/sqlite`, `sagaflow-js/testing` and `sagaflow-js/cloudflare`.
 - The reference DDL in `src/sql/schema.sql`, and the default table names.
 - The two identity formats: step idempotency keys and envelope ids. These appear in your rows, in
   delivered messages and in other people's idempotency records, so they are a wire format.

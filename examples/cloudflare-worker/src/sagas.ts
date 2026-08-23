@@ -1,5 +1,5 @@
-import { action, emit, saga, sagaflow, sleep, step } from '@bayraak/sagaflow'
-import { createD1Journal } from '@bayraak/sagaflow/d1'
+import { action, emit, saga, sagaflow, sleep, step } from 'sagaflow-js'
+import { createD1Journal } from 'sagaflow-js/d1'
 import { env } from 'cloudflare:workers'
 import { z } from 'zod'
 

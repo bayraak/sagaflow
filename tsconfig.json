@@ -17,13 +17,13 @@
     "noEmit": true,
     "types": ["bun"],
     "paths": {
-      "@bayraak/sagaflow": ["./src/index.ts"],
-      "@bayraak/sagaflow/memory": ["./src/memory/index.ts"],
-      "@bayraak/sagaflow/testing": ["./src/testing/index.ts"],
-      "@bayraak/sagaflow/sql": ["./src/sql/index.ts"],
-      "@bayraak/sagaflow/d1": ["./src/d1/index.ts"],
-      "@bayraak/sagaflow/sqlite": ["./src/sqlite/index.ts"],
-      "@bayraak/sagaflow/cloudflare": ["./src/cloudflare/index.ts"]
+      "sagaflow-js": ["./src/index.ts"],
+      "sagaflow-js/memory": ["./src/memory/index.ts"],
+      "sagaflow-js/testing": ["./src/testing/index.ts"],
+      "sagaflow-js/sql": ["./src/sql/index.ts"],
+      "sagaflow-js/d1": ["./src/d1/index.ts"],
+      "sagaflow-js/sqlite": ["./src/sqlite/index.ts"],
+      "sagaflow-js/cloudflare": ["./src/cloudflare/index.ts"]
     }
   },
   "include": ["src", "test", "test-workerd", "vitest.config.ts"]

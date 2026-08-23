@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
-import { emit, idempotencyKey, saga, sagaflow, sleep, step, waitForEvent } from '@bayraak/sagaflow'
-import { createMemoryJournal, createMemorySink } from '@bayraak/sagaflow/memory'
+import { emit, idempotencyKey, saga, sagaflow, sleep, step, waitForEvent } from 'sagaflow-js'
+import { createMemoryJournal, createMemorySink } from 'sagaflow-js/memory'
 import { z } from 'zod'
 
 // Every example in the README lives here, compiled and run, so the first thing a reader copies

@@ -205,7 +205,7 @@ place to learn it. Install the guard in development instead:
 
 ```ts
 // illustrative
-import { sizeGuard } from '@bayraak/sagaflow'
+import { sizeGuard } from 'sagaflow-js'
 
 const flow = sagaflow({ journal, events, observer: sizeGuard() })
 ```
@@ -303,7 +303,7 @@ the tables to match whatever you pass `createSqlJournal`.
 
 ```ts
 // illustrative
-import { schemaFor, schemaSql } from '@bayraak/sagaflow/sql'
+import { schemaFor, schemaSql } from 'sagaflow-js/sql'
 
 writeFileSync('migrations/0001_sagaflow.sql', schemaSql)
 
@@ -325,7 +325,7 @@ the engine and your schema agree. sagaflow does not own your schema.
 
 ### Proving your adapter
 
-Do not write your own suite. `journalConformance` from `@bayraak/sagaflow/testing` is the contract
+Do not write your own suite. `journalConformance` from `sagaflow-js/testing` is the contract
 as executable cases, runnable under bun, vitest, node:test or jest unchanged —
 [`adapters.md`](./adapters.md#proving-a-journal) has the wiring.
 
@@ -365,7 +365,7 @@ const sink: EventSink = {
 ```
 
 And no queue at all is a supported answer. `createInProcessSink(handler)` from
-`@bayraak/sagaflow/memory` calls your handler directly; the outbox table plus the sweeper is then
+`sagaflow-js/memory` calls your handler directly; the outbox table plus the sweeper is then
 the whole delivery mechanism, at-least-once like any other. Without any sink the events simply
 stay in the outbox until something reads them, which is also fine — the journal is the only hard
 requirement.

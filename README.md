@@ -1,7 +1,7 @@
 # sagaflow
 
 [![CI](https://github.com/bayraak/sagaflow/actions/workflows/ci.yml/badge.svg)](https://github.com/bayraak/sagaflow/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/@bayraak/sagaflow.svg)](https://www.npmjs.com/package/@bayraak/sagaflow)
+[![npm](https://img.shields.io/npm/v/sagaflow-js.svg)](https://www.npmjs.com/package/sagaflow-js)
 [![license](https://img.shields.io/npm/l/sagaflow.svg)](./LICENSE)
 
 **An embedded saga engine for TypeScript. Workflows that undo themselves, leave a record, and
@@ -33,11 +33,11 @@ you were about to write, and the `await queue.send()` on the line after the comm
 ## Sixty seconds
 
 ```bash
-bun add @bayraak/sagaflow    # or: npm i @bayraak/sagaflow / pnpm add @bayraak/sagaflow
+bun add sagaflow-js    # or: npm i sagaflow-js / pnpm add sagaflow-js
 ```
 
 ```ts
-import { saga, step, emit } from '@bayraak/sagaflow'
+import { saga, step, emit } from 'sagaflow-js'
 
 const createBooking = saga('booking.create', async (input: { seat: string }) => {
   const seat = await step(
@@ -60,7 +60,7 @@ Effects usually arrive through one object — a queries module, a service, a bin
 and every body that uses it is plain code:
 
 ```ts
-import { actions } from '@bayraak/sagaflow'
+import { actions } from 'sagaflow-js'
 
 export const seats = actions(seatService, {
   reserve: {
@@ -94,7 +94,7 @@ run that needed it most is the one that cannot be taken back. Write it once, bes
 reverses:
 
 ```ts
-import { action } from '@bayraak/sagaflow'
+import { action } from 'sagaflow-js'
 
 export const reserveSeat = action(seats.reserve, { undo: (held) => seats.release(held.id) })
 export const chargeCard = action(cards.charge, { undo: (receipt) => cards.refund(receipt.id) })
@@ -119,8 +119,8 @@ written down atomically with the run and delivered afterwards. It runs with noth
 in memory, with one line telling you so. When you are ready:
 
 ```ts
-import { sagaflow } from '@bayraak/sagaflow'
-import { createSqliteJournal } from '@bayraak/sagaflow/sqlite'
+import { sagaflow } from 'sagaflow-js'
+import { createSqliteJournal } from 'sagaflow-js/sqlite'
 
 const flow = sagaflow({ journal: createSqliteJournal(db), events: queue })
 
@@ -294,7 +294,7 @@ durable one has `.start()` and no call signature worth using, and only a durable
 or wait:
 
 ```ts
-import { saga, sleep, step, waitForEvent } from '@bayraak/sagaflow'
+import { saga, sleep, step, waitForEvent } from 'sagaflow-js'
 
 const chaseInvoice = saga(
   'invoice.chase',
@@ -538,7 +538,7 @@ Delivery is at-least-once. Run `sweepEventOutbox` on a schedule for whatever a r
 could not deliver, and dedupe on the envelope id at the consumer.
 
 ```ts
-import { sweepAbandonedRuns, sweepEventOutbox } from '@bayraak/sagaflow'
+import { sweepAbandonedRuns, sweepEventOutbox } from 'sagaflow-js'
 
 await sweepEventOutbox({ journal, sink })
 await sweepAbandonedRuns({ journal, olderThanMs: 15 * 60_000 })
@@ -557,9 +557,9 @@ executor; we bring the SQL.
 
 | Adapter       | Import                     | For                                                  |
 | ------------- | -------------------------- | ---------------------------------------------------- |
-| Memory        | `@bayraak/sagaflow/memory` | tests, and the worked reference for writing your own |
-| Cloudflare D1 | `@bayraak/sagaflow/d1`     | Workers                                              |
-| SQLite        | `@bayraak/sagaflow/sqlite` | `bun:sqlite` / `node:sqlite`                         |
+| Memory        | `sagaflow-js/memory` | tests, and the worked reference for writing your own |
+| Cloudflare D1 | `sagaflow-js/d1`     | Workers                                              |
+| SQLite        | `sagaflow-js/sqlite` | `bun:sqlite` / `node:sqlite`                         |
 
 Getting the tables in place is two lines or one command, whichever suits you:
 
@@ -583,7 +583,7 @@ configurable — sagaflow does not own your schema, your migration tool does. Se
 
 ### Inline, anywhere
 
-1. `bun add @bayraak/sagaflow`
+1. `bun add sagaflow-js`
 2. Apply the DDL with your own migration tool.
 3. Build a runtime per request: `{ tenantId, journal, events? }`.
 4. Call `workflow.run({ input, ctx })` in your handler.
@@ -627,7 +627,7 @@ environments inherit nothing** — repeat every binding in every environment blo
 A saga is an async function, so testing one is calling it:
 
 ```ts
-import { createMemoryJournal, createMemorySink } from '@bayraak/sagaflow/memory'
+import { createMemoryJournal, createMemorySink } from 'sagaflow-js/memory'
 
 const journal = createMemoryJournal()
 const sink = createMemorySink()
@@ -671,7 +671,7 @@ A fake that caches results by name reproduces exactly what a real platform does 
 re-invocation; one that calls `run` more than once reproduces retries.
 
 Writing a journal adapter? Do not write your own suite — `journalConformance` from
-`@bayraak/sagaflow/testing` is the contract as executable cases, runnable under any test runner.
+`sagaflow-js/testing` is the contract as executable cases, runnable under any test runner.
 
 ## Versioning law
 

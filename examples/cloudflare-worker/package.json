@@ -8,6 +8,6 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "@bayraak/sagaflow": "^0.1.0"
+    "sagaflow-js": "^0.1.0"
   }
 }

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
-import { createMemoryJournal } from '@bayraak/sagaflow/memory'
-import { journalConformance } from '@bayraak/sagaflow/testing'
+import { createMemoryJournal } from 'sagaflow-js/memory'
+import { journalConformance } from 'sagaflow-js/testing'
 
 const words = [
   'zero',

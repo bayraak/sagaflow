@@ -3,9 +3,9 @@ import { describe, expect, it } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
-import { schemaSql, schemaStatements } from '@bayraak/sagaflow/sql'
-import { createSqliteJournal } from '@bayraak/sagaflow/sqlite'
-import { journalConformance } from '@bayraak/sagaflow/testing'
+import { schemaSql, schemaStatements } from 'sagaflow-js/sql'
+import { createSqliteJournal } from 'sagaflow-js/sqlite'
+import { journalConformance } from 'sagaflow-js/testing'
 
 // Getting started should not require finding a DDL file, deciding where to put it and wiring a
 // migration tool. `migrate()` is the two-minute path; your migration tool is the grown-up one,

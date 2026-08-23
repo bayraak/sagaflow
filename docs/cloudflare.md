@@ -6,9 +6,9 @@ Durable mode runs on Cloudflare Workflows. Inline mode runs on Workers with noth
 
 ```ts
 import { env } from 'cloudflare:workers'
-import { sagaflow } from '@bayraak/sagaflow'
-import { createD1Journal } from '@bayraak/sagaflow/d1'
-import { entrypointFor, workerFor } from '@bayraak/sagaflow/cloudflare'
+import { sagaflow } from 'sagaflow-js'
+import { createD1Journal } from 'sagaflow-js/d1'
+import { entrypointFor, workerFor } from 'sagaflow-js/cloudflare'
 
 import { createBooking, chaseInvoice } from './sagas'
 

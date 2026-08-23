@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
-import { saga, sagaflow, sizeGuard, step, stepOutputLimit } from '@bayraak/sagaflow'
-import { createMemoryJournal } from '@bayraak/sagaflow/memory'
+import { saga, sagaflow, sizeGuard, step, stepOutputLimit } from 'sagaflow-js'
+import { createMemoryJournal } from 'sagaflow-js/memory'
 
 const big = (bytes: number): string => 'x'.repeat(bytes)
 

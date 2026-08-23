@@ -18,31 +18,31 @@ engine. Run records and the outbox are rows in the host application's own databa
 
 ```ts
 // the verbs — valid only inside a saga body
-import { step, emit, all, sleep, waitForEvent, ctx, runId } from '@bayraak/sagaflow'
+import { step, emit, all, sleep, waitForEvent, ctx, runId } from 'sagaflow-js'
 // declaring and configuring
-import { saga, sagaflow } from '@bayraak/sagaflow'
+import { saga, sagaflow } from 'sagaflow-js'
 // operating
 import {
   sweepEventOutbox,
   sweepAbandonedRuns,
   SagaError,
   SagaCancelledError,
-} from '@bayraak/sagaflow'
+} from 'sagaflow-js'
 // adapters
 import {
   createMemoryJournal,
   createMemorySink,
   createInProcessSink,
-} from '@bayraak/sagaflow/memory'
-import { createSqlJournal } from '@bayraak/sagaflow/sql'
-import { createD1Journal } from '@bayraak/sagaflow/d1'
-import { createSqliteJournal } from '@bayraak/sagaflow/sqlite'
-import { journalConformance } from '@bayraak/sagaflow/testing'
+} from 'sagaflow-js/memory'
+import { createSqlJournal } from 'sagaflow-js/sql'
+import { createD1Journal } from 'sagaflow-js/d1'
+import { createSqliteJournal } from 'sagaflow-js/sqlite'
+import { journalConformance } from 'sagaflow-js/testing'
 import {
   createStepPrimitive,
   createWorkflowEntrypoint,
   sendWorkflowEvent,
-} from '@bayraak/sagaflow/cloudflare'
+} from 'sagaflow-js/cloudflare'
 ```
 
 ## Adding a saga, end to end
@@ -137,7 +137,7 @@ const platform: StepPrimitive = {
 await executeDurable(definitionOf(chaseInvoice)!, { runId, input }, flow.runtime, platform)
 ```
 
-If you write a journal adapter, prove it with `journalConformance` from `@bayraak/sagaflow/testing` —
+If you write a journal adapter, prove it with `journalConformance` from `sagaflow-js/testing` —
 the contract as executable cases, covering every promise the engine relies on, runnable under
 any test runner.
 
