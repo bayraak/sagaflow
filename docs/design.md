@@ -78,8 +78,8 @@ undo runs.
 
 ## The transactional outbox
 
-A run holds what it emits until it succeeds, then writes the events **in the same atomic write
-that closes the run**:
+A run holds what it announces until it succeeds, then writes the events **in the same atomic
+write that closes the run**:
 
 ```mermaid
 sequenceDiagram
@@ -88,7 +88,7 @@ sequenceDiagram
   participant J as journal
   participant S as sink
   participant C as consumer
-  B->>E: emit(...)
+  B->>E: a step announces
   Note over E: held, not sent
   B-->>E: returns
   E->>J: finishRun(status, output, events) — ONE batch
@@ -114,7 +114,7 @@ Nothing here is exactly-once, and nothing anywhere is. The honest version of exa
 at-least-once plus an identity, which is what this is.
 
 A run that was undone puts exactly one thing on the table: `workflow.compensated`. The change did
-not happen, so nothing the body emitted is announced — but the fact that a run was undone is
+not happen, so nothing the run announced is delivered — but the fact that a run was undone is
 something an audit log and an operator both want. It waits for the sweeper rather than being
 drained: a run that fell over is on nobody's hot path.
 
@@ -128,8 +128,8 @@ journal, so everything the engine does _after_ the body had to be made to surviv
    walks the same emissions in the same order and arrives at the same ids.
 2. **The finish goes through the step runner** as the reserved step `finish-run`, so a platform
    that checkpoints steps closes the run once.
-3. **What a step emitted travels home inside its memoised result.** On a replay the step's body
-   never runs and its `emit` calls never happen; an announcement kept anywhere else would be
+3. **What a step announced travels home inside its memoised result.** On a replay the step's body
+   never runs and its announcement is never recomputed; one kept anywhere else would be
    lost, and the run would close having said less the second time than the first.
 
 If the finish itself was the thing that was lost, the second finish writes exactly the rows the
@@ -229,15 +229,33 @@ anything.
 Because the engine owns every boundary and every entry point — the run, the steps, the spans, the
 events, the outbox — the whole program becomes visible through one seam rather than four.
 
-### Effects declare how they are undone and what they announce
+### Effects declare how they are undone and what they announce; sagas declare what their completion announces; bodies announce nothing
 
 `undo` and `announce` live with the effect, not at the call site. An `announce` is emitted from
-_inside_ the step, which is what gives it every property the body's own `emit` has and one more:
-it is part of the step's memoised result, so a replayed step announces exactly once, and a run
-that is undone announces none of it.
+_inside_ the step, which is what makes it part of the step's memoised result: a replayed step
+announces exactly once, and a run that is undone announces none of it.
 
-`emit` in a body remains, and is for the composite facts no single effect owns — "the booking was
-created" is not something the seat service or the card service can know on its own.
+The composite fact no single effect owns — "the booking was created" is not something the seat
+service or the card service can know on its own — belongs to the run, and the run declares it
+beside its name:
+
+```ts
+const createBooking = saga(
+  'booking.create',
+  { announce: (booking) => ['booking.created', { seatId: booking.seatId }] },
+  async (input) => {
+    /* … */
+  },
+)
+```
+
+Derived from what the body returned, at the end, when the run is a fact. A body announcing
+something in the middle of itself is announcing something that has not happened yet: the run can
+still fail on the next line, and then the outbox holds a claim about a change that was undone.
+Held, validated, written in the batch that closes the run, dropped if the run is not one.
+
+That is the whole rule, and it is why there is no announcing verb worth reaching for inside a
+body. `emit` is still exported and still works, deprecated, and goes in 0.2.
 
 ### Totality
 

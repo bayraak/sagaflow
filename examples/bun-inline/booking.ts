@@ -1,4 +1,4 @@
-import { action, emit, saga, sagaflow } from 'sagaflow-js'
+import { action, saga, sagaflow } from 'sagaflow-js'
 import { createInProcessSink, createMemoryJournal } from 'sagaflow-js/memory'
 import { z } from 'zod'
 
@@ -45,15 +45,21 @@ const chargeCard = action(
 
 export const createBooking = saga(
   'booking.create',
-  { input: z.object({ seat: z.string().min(1), confirm: z.boolean().default(true) }) },
+  {
+    input: z.object({ seat: z.string().min(1), confirm: z.boolean().default(true) }),
+    // Declared with the run, derived from what the run returned, written in the batch that
+    // closes it — and never written at all if the run is undone.
+    announce: (booking: { seat: string; chargeId: string }) => [
+      'booking.created',
+      { seat: booking.seat, chargeId: booking.chargeId },
+    ],
+  },
   async (input) => {
     const held = await reserveSeat(input.seat)
     const receipt = await chargeCard(held.price)
 
     // A pure check needs no step. If it throws, the run undoes itself and says why.
     if (!input.confirm) throw new Error('the booking was not confirmed')
-
-    await emit('booking.created', { seat: held.seat, chargeId: receipt.id })
 
     return { seat: held.seat, chargeId: receipt.id }
   },

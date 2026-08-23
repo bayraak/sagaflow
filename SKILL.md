@@ -18,7 +18,7 @@ engine. Run records and the outbox are rows in the host application's own databa
 
 ```ts
 // the verbs — valid only inside a saga body
-import { step, emit, all, sleep, waitForEvent, ctx, runId } from 'sagaflow-js'
+import { step, all, sleep, waitForEvent, ctx, runId } from 'sagaflow-js'
 // declaring and configuring
 import { saga, sagaflow } from 'sagaflow-js'
 // operating
@@ -53,7 +53,15 @@ import {
    what most mutations are.
 
 3. **Declare what it needs.** `input` (any Standard Schema), `output`, `idempotent: true` or a
-   function. All optional.
+   function, and `announce`. All optional.
+
+   **Events are derived from the run, not emitted by the body.** An effect declares what it
+   announces beside how it is undone — `action(work, { undo, announce })`, or `announce` in a
+   step's options. A run declares what its completion announces —
+   `saga(name, { announce: (output, input) => ['booking.created', { id: output.id }] }, body)`,
+   one event, an array of them, or `null`. A body announces nothing: a line in the middle of a
+   body announces something that has not happened yet, because the run can still fail on the
+   next line.
 
 4. **Call it.** `await createBooking(input, flow)` runs it and answers with what the body
    returned. `.try(input, flow)` answers instead of throwing. `.start(input, flow)` hands a
@@ -73,7 +81,7 @@ await createBooking(input, flow.for({ tenantId, actor }))
 
 ## Verbs are awaited, reads are not
 
-`step`, `all`, `emit`, `sleep`, `waitForEvent` return promises — await every one. `ctx()` and
+`step`, `all`, `sleep`, `waitForEvent` return promises — await every one. `ctx()` and
 `runId()` are plain reads. A step started and not awaited fails the run by name. Turn on
 `@typescript-eslint/no-floating-promises`.
 
@@ -89,8 +97,8 @@ await createBooking(input, flow.for({ tenantId, actor }))
 - Every step's own context carries `idempotencyKey` = `${runId}:${seq}` (`:undo` for an undo),
   stable across attempts and replays, plus `attempt`, `runId`, `tenantId`, `actor` and `ctx`.
 - A step name reused within one run is refused, on both executors.
-- `workflow.completed` and `workflow.compensated` belong to the engine; a body emitting one is
-  refused.
+- `workflow.completed` and `workflow.compensated` belong to the engine; announcing one yourself
+  is refused.
 - A saga called inside another saga joins its trail under `child.name/step`; one run, one undo
   chain.
 
@@ -144,7 +152,7 @@ with rising `attempt`.
 - **Fan-out under one name.** The second item would silently get the first item's result — the
   single most common durable bug. Refused at runtime now, but derive the name from the data and
   never from a loop counter over an unordered collection.
-- **A step that emits and then throws.** The emission is dropped with the run, on purpose. If
+- **A step that announces and then throws.** The announcement is dropped with the run, on purpose. If
   something downstream must hear about a failure, that is what `workflow.compensated` is for.
 - **`db.transaction()` on Cloudflare D1.** It type-checks and throws at runtime. A batch is the
   only atomic unit; that is why the journal contract asks for one.

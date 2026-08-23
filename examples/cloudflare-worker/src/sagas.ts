@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers'
-import { action, emit, saga, sagaflow, sleep, step } from 'sagaflow-js'
+import { action, saga, sagaflow, sleep, step } from 'sagaflow-js'
 import { createD1Journal } from 'sagaflow-js/d1'
 import { z } from 'zod'
 
@@ -30,23 +30,35 @@ const reserveSeat = action(
 /** Inline: a short mutation against our own database, answered in the same request. */
 export const createBooking = saga(
   'booking.create',
-  { input: z.object({ seat: z.string().min(1) }), idempotent: true },
+  {
+    input: z.object({ seat: z.string().min(1) }),
+    idempotent: true,
+    // What the run announces when it completes, declared where the run is declared. Not emitted
+    // from inside the body: halfway through, the booking has not happened yet.
+    announce: (booking: { id: string; seat: string }) => [
+      'booking.created',
+      { seat: booking.seat },
+    ],
+  },
   async (input) => {
     const held = await reserveSeat({ seat: input.seat, tenantId: 'acme' })
-    await emit('booking.created', { seat: input.seat })
 
-    return { id: held.id }
+    return { id: held.id, seat: input.seat }
   },
 )
 
 /** Durable: it sleeps, so it must survive a deploy. */
 export const chaseBooking = saga(
   'booking.chase',
-  { input: z.object({ seat: z.string().min(1) }), durable: true, idempotent: true },
+  {
+    input: z.object({ seat: z.string().min(1) }),
+    durable: true,
+    idempotent: true,
+    announce: (chased: { chased: string }) => ['booking.chased', { seat: chased.chased }],
+  },
   async (input) => {
     await sleep('grace-period', '1 second')
     await step('remind', async () => ({ reminded: input.seat }))
-    await emit('booking.chased', { seat: input.seat })
 
     return { chased: input.seat }
   },

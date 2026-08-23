@@ -159,6 +159,11 @@ export function step(first: unknown, second?: unknown, third?: unknown): Promise
  * Announce something the run did. Held until the run succeeds, written down in the same batch
  * that closes it, delivered afterwards. Awaited like every other verb, though it has nothing to
  * wait for — one rule, no exceptions to remember.
+ *
+ * @deprecated Declare it on the step, action or saga instead. An event is derived from the run,
+ * not emitted by the body: a line in the middle of a body announces something that has not
+ * happened yet, because the run can still fail on the next line. Use `announce` on the effect
+ * that causes the fact, or on the saga for the fact no single effect owns. Removed in 0.2.
  */
 export const emit = async (type: string, payload: unknown): Promise<void> => {
   ;(inside('emit').handle.emit as (t: string, p: unknown) => void)(type, payload)

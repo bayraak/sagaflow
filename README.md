@@ -37,19 +37,22 @@ bun add sagaflow-js    # or: npm i sagaflow-js / pnpm add sagaflow-js
 ```
 
 ```ts
-import { saga, step, emit } from 'sagaflow-js'
+import { saga, step } from 'sagaflow-js'
 
-const createBooking = saga('booking.create', async (input: { seat: string }) => {
-  const seat = await step(
-    'reserve',
-    () => seats.reserve(input.seat),
-    (reserved) => seats.release(reserved.id),
-  )
-  await step('charge', () => cards.charge(seat.price))
-  await emit('booking.created', { seatId: seat.id })
+const createBooking = saga(
+  'booking.create',
+  { announce: (seat) => ['booking.created', { seatId: seat.id }] },
+  async (input: { seat: string }) => {
+    const seat = await step(
+      'reserve',
+      () => seats.reserve(input.seat),
+      (reserved) => seats.release(reserved.id),
+    )
+    await step('charge', () => cards.charge(seat.price))
 
-  return seat
-})
+    return seat
+  },
+)
 
 await createBooking({ seat: '12A' })
 ```
@@ -99,13 +102,16 @@ import { action } from 'sagaflow-js'
 export const reserveSeat = action(seats.reserve, { undo: (held) => seats.release(held.id) })
 export const chargeCard = action(cards.charge, { undo: (receipt) => cards.refund(receipt.id) })
 
-const createBooking = saga('booking.create', async (input: { seat: string }) => {
-  const seat = await reserveSeat(input.seat)
-  await chargeCard(seat.price)
-  await emit('booking.created', { seatId: seat.id })
+const createBooking = saga(
+  'booking.create',
+  { announce: (seat) => ['booking.created', { seatId: seat.id }] },
+  async (input: { seat: string }) => {
+    const seat = await reserveSeat(input.seat)
+    await chargeCard(seat.price)
 
-  return seat
-})
+    return seat
+  },
+)
 ```
 
 Inside a saga each call is a step — named after the function, recorded, retried and undone like
@@ -137,7 +143,7 @@ bindings and the layer that knows who is asking never have to know about each ot
 `sagaflow({…}).for({ db, queries })` at module scope, `.for({ tenantId, actor })` per request,
 and `ctx()` inside the body sees all four.
 
-**Verbs are awaited, reads are not.** `step`, `all`, `emit`, `sleep` and `waitForEvent` return
+**Verbs are awaited, reads are not.** `step`, `sleep` and `waitForEvent` return
 promises and every example awaits them; `ctx()` and `runId()` are plain reads. A step you start
 and forget to await fails the run by name rather than letting it be recorded as completed while
 it was still going — turn on `@typescript-eslint/no-floating-promises` and it never happens.
@@ -271,7 +277,7 @@ in [`docs/benchmarks.md`](./docs/benchmarks.md).
 | **Sink**           | Where events go. Structurally a Cloudflare Queue: `{ sendBatch }`.                                                                                             |
 | **Step primitive** | How a durable platform runs a step. Cloudflare Workflows is the shipped one.                                                                                   |
 
-A run walks its steps, holds what it emits, and closes:
+A run walks its steps, holds what they announce, and closes:
 
 ```mermaid
 flowchart LR
@@ -515,13 +521,35 @@ decision. Cloudflare's `terminate()` is the hard kill, and it runs no sagaflow u
 
 ## Events and the outbox
 
-`await emit(type, payload)` anywhere in a body or a step. Emissions are **held** until the run
-succeeds, so a run that was undone never announces a change that did not happen. They are
-written into your outbox table **in the same atomic write that closes the run**, and delivered
-afterwards.
+**Events are derived from the run, not emitted by the body.** An effect declares what it
+announces where it declares how it is undone; a run declares what its completion announces where
+it declares its name. A body announces nothing — a body reaching for an emit verb halfway through
+is announcing something that has not happened yet, because the run can still fail on the next
+line.
 
-Declare `eventSchemas` on the runtime and `emit` is typed to your own event names and validated
-against your own schemas:
+```ts
+export const chargeCard = action(cards.charge, {
+  undo: (receipt) => cards.refund(receipt.id),
+  announce: (receipt) => ['payment.taken', { id: receipt.id, amount: receipt.amount }],
+})
+
+const createBooking = saga(
+  'booking.create',
+  { announce: (seat) => ['booking.created', { seatId: seat.id }] },
+  async (input: { seat: string }) => {
+    /* … */
+  },
+)
+```
+
+A step's announcement travels in the step's memoised result, so a replayed step announces exactly
+once. A run's announcement is derived from what the body returned, at the end, when the run is a
+fact. Both are **held** until the run succeeds, so a run that was undone never announces a change
+that did not happen. Both are written into your outbox table **in the same atomic write that
+closes the run**, and delivered afterwards.
+
+Declare `eventSchemas` on the runtime and every announcement is typed to your own event names and
+validated against your own schemas:
 
 ```ts
 const flow = sagaflow({
@@ -541,7 +569,7 @@ Two facts about the run itself are always emitted by the engine:
 | `workflow.completed`   | the run finished                | `{ runId, name }`                 |
 | `workflow.compensated` | the run was undone or cancelled | `{ runId, name, error, outcome }` |
 
-A compensated run's outbox holds exactly that one event and nothing the body emitted: the change
+A compensated run's outbox holds exactly that one event and nothing the run announced: the change
 did not happen, but the fact that the run was undone is something an audit log and an operator
 both want.
 
@@ -603,7 +631,7 @@ configurable — sagaflow does not own your schema, your migration tool does. Se
 3. Build a runtime per request: `{ tenantId, journal, events? }`.
 4. Call `workflow.run({ input, ctx })` in your handler.
 5. Deploy however you already deploy.
-6. Schedule `sweepAbandonedRuns`, and `sweepEventOutbox` if you emit events.
+6. Schedule `sweepAbandonedRuns`, and `sweepEventOutbox` if anything announces events.
 
 No account, no credentials, no service. The journal is the only hard requirement — the queue is
 optional, and without one the outbox simply holds your events until you read them yourself.
@@ -878,7 +906,7 @@ axis is transactions, not diagrams.
 engine is built for exactly that: replayed steps are not re-executed, and the events are written
 once.
 
-**Can I emit events from a compensation?** You can, and they are dropped with the run — a change
+**Can an undo announce something?** It can, and it is dropped with the run — a change
 that did not happen is not announced. The run's own `workflow.compensated` is what gets written.
 
 ---

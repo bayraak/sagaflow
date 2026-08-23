@@ -145,7 +145,7 @@ From Cloudflare's reference, checked 2026-08-22. Each row links to the sagaflow 
 | Limit                  | Free       | Paid                              | What it means here                                                                                        |
 | ---------------------- | ---------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | Step result size       | 1 MiB      | 1 MiB                             | Receipts, not entities. A dev-mode guard warns before you find out in production.                         |
-| Event payload size     | 1 MiB      | 1 MiB                             | Same rule for what `emit` carries.                                                                        |
+| Event payload size     | 1 MiB      | 1 MiB                             | Same rule for what an announcement carries.                                                               |
 | Sleep duration         | 365 days   | 365 days                          | A run may legitimately be open for a year — which is why the abandoned sweep never touches a durable run. |
 | Steps per workflow     | 1,024      | 10,000 (to 25,000)                | The engine adds two per run (`finish-run`, `emit-events`) plus one per undo.                              |
 | Concurrent instances   | 100        | 50,000                            | Only `running` counts; `waiting` is free. A saga that sleeps costs nothing while it sleeps.               |

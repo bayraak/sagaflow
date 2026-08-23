@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { emit, idempotencyKey, saga, sagaflow, sleep, step, waitForEvent } from 'sagaflow-js'
+import { idempotencyKey, saga, sagaflow, sleep, step, waitForEvent } from 'sagaflow-js'
 import { createMemoryJournal, createMemorySink } from 'sagaflow-js/memory'
 import { z } from 'zod'
 
@@ -17,17 +17,20 @@ describe('README: the first screen', () => {
   }
   const cards = { charge: async (amount: number) => ({ chargeId: `ch_${amount}` }) }
 
-  const createBooking = saga('booking.create', async (input: { seat: string }) => {
-    const seat = await step(
-      'reserve',
-      () => seats.reserve(input.seat),
-      (reserved) => seats.release(reserved.id),
-    )
-    await step('charge', () => cards.charge(seat.price))
-    await emit('booking.created', { seatId: seat.id })
+  const createBooking = saga(
+    'booking.create',
+    { announce: (seat) => ['booking.created', { seatId: seat.id }] },
+    async (input: { seat: string }) => {
+      const seat = await step(
+        'reserve',
+        () => seats.reserve(input.seat),
+        (reserved) => seats.release(reserved.id),
+      )
+      await step('charge', () => cards.charge(seat.price))
 
-    return seat
-  })
+      return seat
+    },
+  )
 
   it('runs', async () => {
     const journal = createMemoryJournal()

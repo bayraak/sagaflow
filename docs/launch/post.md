@@ -20,19 +20,22 @@ process.
 ## Six lines
 
 ```ts
-import { emit, saga, step } from 'sagaflow-js'
+import { saga, step } from 'sagaflow-js'
 
-const createBooking = saga('booking.create', async (input: { seat: string }) => {
-  const seat = await step(
-    'reserve',
-    () => seats.reserve(input.seat),
-    (held) => seats.release(held.id),
-  )
-  await step('charge', () => cards.charge(seat.price))
-  await emit('booking.created', { seatId: seat.id })
+const createBooking = saga(
+  'booking.create',
+  { announce: (seat) => ['booking.created', { seatId: seat.id }] },
+  async (input: { seat: string }) => {
+    const seat = await step(
+      'reserve',
+      () => seats.reserve(input.seat),
+      (held) => seats.release(held.id),
+    )
+    await step('charge', () => cards.charge(seat.price))
 
-  return seat
-})
+    return seat
+  },
+)
 
 await createBooking({ seat: '12A' })
 ```

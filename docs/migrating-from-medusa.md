@@ -41,7 +41,7 @@ constructs that have no counterpart because the language already had one.
 | `createHook(name, data)` + `WorkflowResponse(v, { hooks })` | typed hooks, 0.2                                                        | See [hooks](#hooks) for what to do today.                                                                                        |
 | `workflow.hooks.name(handler, compensate)`                  | 0.2                                                                     | When they land, a handler is a step like any other: its own undo, able to fail the run.                                          |
 | `acquireLockStep({ key, timeout, ttl })`                    | `idempotent: true` or `idempotent: (input) => key`                      | A different mechanism for an overlapping problem — see [locking](#locking-and-idempotency).                                      |
-| `emitEventStep({ eventName, data })`                        | `await emit(type, payload)`                                             | Held until the run succeeds, then written in the same atomic batch that closes it.                                               |
+| `emitEventStep({ eventName, data })`                        | `announce` on the step, the action, or the saga                         | Declared, never emitted mid-body. Held until the run succeeds, then written in the same atomic batch that closes it.             |
 | `createStep({ name, async: true }, …)` + `setStepSuccess`   | `durable: true` + `await waitForEvent(name, { type })`                  | Medusa can make one step async; sagaflow marks the whole saga durable. See [long-running](#long-running-work).                   |
 | `.run({ input })` → `{ result, errors, transaction }`       | `await def(input, flow)` or `await def.try(input, flow)`                | `try` answers `{ ok, value }` / `{ ok: false, error }` instead of an errors array.                                               |
 | `transaction.transactionId`                                 | `runId`                                                                 | On the result, on every envelope, and the primary key of a row in your own table.                                                |
@@ -88,9 +88,7 @@ const placeOrder = saga('order.place', async (input: Input) => {
     step('receipt', () => stamp(amount)),
   ])
 
-  if (input.notify) await emit('order.placed', { id: input.id })
-
-  return { seat, invoice, receipt }
+  return { seat, invoice, receipt, notify: input.notify }
 })
 ```
 
@@ -172,8 +170,27 @@ undos are interleaved into the parent's chain in start order rather than run as 
 
 `emitEventStep` publishes through Medusa's event bus as a step in the workflow.
 
-`await emit(type, payload)` in a sagaflow body or step does something structurally different, and
-it is the main thing sagaflow has that Medusa does not:
+sagaflow has no emitting step and no emitting verb worth reaching for. An event is **declared**:
+on the effect that causes it, beside how that effect is undone, or on the saga, as what its
+completion announces.
+
+```ts
+export const placeOrder = action(orders.place, {
+  undo: (order) => orders.void(order.id),
+  announce: (order) => ['order.placed', { id: order.id }],
+})
+
+const checkout = saga(
+  'order.checkout',
+  { announce: (result) => (result.notify ? ['order.placed', { id: result.id }] : null) },
+  async (input) => {
+    /* … */
+  },
+)
+```
+
+That is structurally different from an emitting step, and it is the main thing sagaflow has that
+Medusa does not:
 
 - Emissions are **held** until the run succeeds. A run that was undone announces nothing it did,
   because it did not do it.
@@ -184,8 +201,8 @@ it is the main thing sagaflow has that Medusa does not:
 - A run that was undone writes exactly one event, `workflow.compensated`, because an audit log and
   an operator both want to know that.
 
-Declare `eventSchemas` on the instance and `emit` is typed to your own event names and validated
-against your own schemas.
+Declare `eventSchemas` on the instance and every announcement is typed to your own event names
+and validated against your own schemas.
 
 ## Locking and idempotency
 
@@ -281,7 +298,7 @@ UndoSpec<…>` then makes it a compile error to add a write without deciding how
 6. **Wire the scope.** One `flow.for(...)` or `flow.scope(...)` per request; the tenant comes from
    the session, never from input.
 7. **Then the events**, last, because this is the part with no counterpart: what was
-   `emitEventStep` becomes `emit`, and you gain an outbox you now have to drain — a queue consumer
+   `emitEventStep` becomes an `announce`, and you gain an outbox you now have to drain — a queue consumer
    and a `sweepEventOutbox` cron, or an in-process sink.
 
 Test as you go by calling the saga. A memory journal and no platform is milliseconds per case.

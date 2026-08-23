@@ -208,7 +208,7 @@ from columns years later.
 | `workflow.compensated` | the run was undone, failed or cancelled | `{ runId, name, error, outcome }` |
 
 Exactly one per closed run — including runs the sweeper closes and runs whose platform refused to
-start them. A workflow that tries to emit one of these names is refused.
+start them. A workflow that tries to announce one of these names is refused.
 
 ## Run inputs are receipts, not corpora
 

@@ -11,6 +11,7 @@ import {
   step,
   waitForEvent,
 } from './ambient.js'
+import { announceResult, type Announce } from './announce.js'
 import { defineWorkflow, type DurableWorkflow, type InlineWorkflow } from './define.js'
 import type { Flow } from './flow.js'
 import { defaultInstance } from './instance.js'
@@ -50,8 +51,27 @@ const handle: DurableSagaHandle = {
   waitForEvent,
 }
 
-type SharedOptions<Input> = {
+type SharedOptions<Input, Output = unknown> = {
   output?: StandardSchemaV1
+  /**
+   * What this run announces when it completes, given what it returned and what it was asked for.
+   *
+   * A run knows what it did, so the run says it — in the same place it says its name, its input
+   * schema and its idempotency rule. A body that reaches for an emit verb halfway through is
+   * announcing something that has not happened yet: the run can still fail after that line, and
+   * the whole point of the outbox is that nothing is announced until the run is a fact.
+   *
+   * One event, several, or `null` for a run with nothing to say. Everything an event gets
+   * anywhere else it gets here: validated against `eventSchemas`, held until the run closes,
+   * written in the batch that closes it, and dropped entirely if the run is undone.
+   *
+   * `output` is typed from what the body returns whenever TypeScript can see it before it types
+   * this callback — which is every body whose own parameter is annotated. A body that takes its
+   * parameter type from an input schema instead is checked in a later pass, so annotate what you
+   * are announcing about: `announce: (invoice: Invoice) => [...]`. It is checked against the
+   * body's return either way, and the payload is validated at runtime regardless.
+   */
+  announce?: Announce<Output, Input>
   /**
    * How this run is recognised as one somebody already asked for. `true` derives the key from
    * the input; a function is there for a key that means something to somebody else.
@@ -59,20 +79,22 @@ type SharedOptions<Input> = {
   idempotent?: true | ((input: Input) => string)
 }
 
-export type SagaOptions<Schema extends StandardSchemaV1> = SharedOptions<
-  StandardSchemaV1.InferOutput<Schema>
+export type SagaOptions<Schema extends StandardSchemaV1, Output = unknown> = SharedOptions<
+  StandardSchemaV1.InferOutput<Schema>,
+  Output
 > & { input: Schema; durable?: false }
 
-export type DurableSagaOptions<Schema extends StandardSchemaV1> = SharedOptions<
-  StandardSchemaV1.InferOutput<Schema>
+export type DurableSagaOptions<Schema extends StandardSchemaV1, Output = unknown> = SharedOptions<
+  StandardSchemaV1.InferOutput<Schema>,
+  Output
 > & { input: Schema; durable: true }
 
-export type UntypedSagaOptions<Input> = SharedOptions<Input> & {
+export type UntypedSagaOptions<Input, Output = unknown> = SharedOptions<Input, Output> & {
   input?: undefined
   durable?: false
 }
 
-export type UntypedDurableSagaOptions<Input> = SharedOptions<Input> & {
+export type UntypedDurableSagaOptions<Input, Output = unknown> = SharedOptions<Input, Output> & {
   input?: undefined
   durable: true
 }
@@ -161,22 +183,22 @@ export function saga<Input, Output>(
 ): InlineSaga<Input, Output>
 export function saga<Schema extends StandardSchemaV1, Output>(
   name: string,
-  options: DurableSagaOptions<Schema>,
+  options: DurableSagaOptions<Schema, Output>,
   body: (input: StandardSchemaV1.InferOutput<Schema>, s: DurableSagaHandle) => Promise<Output>,
 ): DurableSaga<StandardSchemaV1.InferInput<Schema>, Output>
 export function saga<Schema extends StandardSchemaV1, Output>(
   name: string,
-  options: SagaOptions<Schema>,
+  options: SagaOptions<Schema, Output>,
   body: (input: StandardSchemaV1.InferOutput<Schema>, s: SagaHandle) => Promise<Output>,
 ): InlineSaga<StandardSchemaV1.InferInput<Schema>, Output>
 export function saga<Input, Output>(
   name: string,
-  options: UntypedDurableSagaOptions<Input>,
+  options: UntypedDurableSagaOptions<Input, Output>,
   body: (input: Input, s: DurableSagaHandle) => Promise<Output>,
 ): DurableSaga<Input, Output>
 export function saga<Input, Output>(
   name: string,
-  options: UntypedSagaOptions<Input>,
+  options: UntypedSagaOptions<Input, Output>,
   body: (input: Input, s: SagaHandle) => Promise<Output>,
 ): InlineSaga<Input, Output>
 export function saga(
@@ -184,9 +206,10 @@ export function saga(
   optionsOrBody: unknown,
   maybeBody?: unknown,
 ): DurableSaga<unknown, unknown> | InlineSaga<unknown, unknown> {
-  const options = (
-    typeof optionsOrBody === 'function' ? {} : optionsOrBody
-  ) as SharedOptions<unknown> & { input?: StandardSchemaV1; durable?: boolean }
+  const options = (typeof optionsOrBody === 'function' ? {} : optionsOrBody) as SharedOptions<
+    unknown,
+    unknown
+  > & { input?: StandardSchemaV1; durable?: boolean }
   const body = (typeof optionsOrBody === 'function' ? optionsOrBody : maybeBody) as (
     input: unknown,
     s: DurableSagaHandle,
@@ -214,9 +237,25 @@ export function saga(
         : { idempotency: options.idempotent as true | ((given: unknown) => string) }),
     },
     async (parsed: unknown, wf: unknown) =>
-      runInFrame({ handle: wf as never, prefix: '', durable }, () => body(parsed, handle)),
+      runInFrame({ handle: wf as never, prefix: '', durable }, () => announcing(parsed)),
   ) as DurableWorkflow<WorkflowRuntime, StandardSchemaV1, unknown> &
     Pick<InlineWorkflow<WorkflowRuntime, StandardSchemaV1, unknown>, 'run' | 'tryRun'>
+
+  /*
+   * The body, and then what its completion announces.
+   *
+   * Inside the frame and inside the run, so the announcement is held with everything else the
+   * run emitted, validated by the same schemas, written in the batch that closes the run, and
+   * dropped with the run if anything after it goes wrong — including the output schema, which
+   * the engine checks after this. A durable replay walks the same body to the same point and
+   * mints the same envelope id, so the announcement lands on the row it already wrote.
+   */
+  const announcing = async (parsed: unknown): Promise<unknown> => {
+    const output = await body(parsed, handle)
+    await announceResult(options.announce, output, parsed)
+
+    return output
+  }
 
   // A saga inside a saga is not a second run. Its steps join the caller's trail under its own
   // name, so `charge/authorise` reads as what it is, and its undos are part of one chain.
@@ -226,7 +265,7 @@ export function saga(
 
     const parsed = await validate(input, given, `the input of ${name}`)
 
-    return runInFrame({ ...frame, prefix: `${frame.prefix}${name}/` }, () => body(parsed, handle))
+    return runInFrame({ ...frame, prefix: `${frame.prefix}${name}/` }, () => announcing(parsed))
   }
 
   const callable = async (given: unknown, flow?: Flow, call?: CallOptions): Promise<unknown> => {

@@ -38,7 +38,7 @@ that marker in 0.1.0.
 Your runtime object is spread into every step context, so avoid these names on it — the engine
 sets them and would overwrite yours:
 
-`runId` · `emit` · `idempotencyKey` · `attempt`
+`runId` · `idempotencyKey` · `attempt` · (`emit`, deprecated — declare it on the step, action or saga instead; removed in 0.2)
 
 And these are the runtime's own and are read by the engine: `tenantId`, `actor`, `journal`,
 `events`, `eventSchemas`, `observer`.

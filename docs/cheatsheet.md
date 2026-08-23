@@ -5,21 +5,24 @@ One screen. Everything else is [the README](../README.md).
 ## Declare
 
 ```ts
-import { saga, step, emit, action, actions, sagaflow } from 'sagaflow-js'
+import { saga, step, action, actions, sagaflow } from 'sagaflow-js'
 
-const createBooking = saga('booking.create', async (input: { seat: string }) => {
-  const seat = await step(
-    'reserve',
-    () => seats.reserve(input.seat),
-    (r) => seats.release(r.id),
-  )
-  await emit('booking.created', { seatId: seat.id })
+const createBooking = saga(
+  'booking.create',
+  { announce: (seat) => ['booking.created', { seatId: seat.id }] },
+  async (input: { seat: string }) => {
+    const seat = await step(
+      'reserve',
+      () => seats.reserve(input.seat),
+      (r) => seats.release(r.id),
+    )
 
-  return seat
-})
+    return seat
+  },
+)
 
 saga(name, body) // inline, no input schema
-saga(name, { input, output, idempotent, durable }, body)
+saga(name, { input, output, idempotent, durable, announce }, body)
 ```
 
 | Option          |                                                                       |
@@ -27,6 +30,7 @@ saga(name, { input, output, idempotent, durable }, body)
 | `input`         | any Standard Schema — Zod, Valibot, ArkType                           |
 | `output`        | validated before the run closes; a refusal undoes the run             |
 | `idempotent`    | `true` (hash of the input) or `(input) => string`                     |
+| `announce`      | `(output, input) => [type, payload] \| [[…], […]] \| null`            |
 | `durable: true` | needed for `sleep`/`waitForEvent`; gives `.start()` instead of a call |
 
 ## Call
@@ -42,17 +46,16 @@ await chaseInvoice.startAll(inputs, flow) // durable, batched
 
 ## Inside a body
 
-| Verb — **await these**                        |                                       |
-| --------------------------------------------- | ------------------------------------- |
-| `step(name, run, undo?)`                      | do a thing, and say how to undo it    |
-| `step(name, run, { undo, retries, timeout })` | …with a budget                        |
-| `emit(type, payload)`                         | announce; held until the run succeeds |
-| `sleep(name, '7 days')`                       | durable only                          |
-| `waitForEvent(name, { type, timeout })`       | durable only                          |
-| **Read — no await**                           |                                       |
-| `ctx()`                                       | `{ tenantId, actor, …scope }`         |
-| `runId()`                                     | this run                              |
-| `idempotencyKey()` · `attempt()`              | inside a step's own function          |
+| Verb — **await these**                        |                                    |
+| --------------------------------------------- | ---------------------------------- |
+| `step(name, run, undo?)`                      | do a thing, and say how to undo it |
+| `step(name, run, { undo, retries, timeout })` | …with a budget                     |
+| `sleep(name, '7 days')`                       | durable only                       |
+| `waitForEvent(name, { type, timeout })`       | durable only                       |
+| **Read — no await**                           |                                    |
+| `ctx()`                                       | `{ tenantId, actor, …scope }`      |
+| `runId()`                                     | this run                           |
+| `idempotencyKey()` · `attempt()`              | inside a step's own function       |
 
 `Promise.all([step(…), step(…)])` is the parallel group. `if`, `for`, `try` are the control flow.
 A step you start and forget to `await` fails the run by name.
