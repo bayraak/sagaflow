@@ -3,7 +3,12 @@ export { requestCancellation, SagaCancelledError } from './cancel.js'
 export { millisecondsOf } from './duration.js'
 export { createInlineRunner } from './retry.js'
 export { claimRun, type RunClaim } from './claim.js'
-export { compensationIdempotencyKey, envelopeId, stepIdempotencyKey } from './identity.js'
+export {
+  compensationIdempotencyKey,
+  envelopeId,
+  lifecycleEnvelopeId,
+  stepIdempotencyKey,
+} from './identity.js'
 export { action, type ActionOptions } from './action.js'
 export {
   actions,

@@ -34,6 +34,13 @@ jobs:
       - name: Test
         run: bun test
 
+      # The overhead benchmarks are not a gate — a shared runner's timings are noise, and a
+      # budget checked against noise is a flaky build that teaches people to ignore it. This
+      # step asserts only that the harness still runs and still type-checks, so a change that
+      # breaks it is found here rather than the next time somebody asks what it costs.
+      - name: Benchmark smoke
+        run: bun run bench
+
       # The examples are executed, not merely type-checked.
       - name: Test the examples
         run: bun run test:examples

@@ -1,0 +1,166 @@
+{
+  "version": "0.1.0",
+  "measuredAt": "2026-08-22T23:25:38.978Z",
+  "machine": {
+    "runtime": "bun 1.4.0",
+    "arch": "arm64",
+    "platform": "darwin",
+    "release": "25.6.0",
+    "cpu": "Apple M1 Pro",
+    "cores": 8,
+    "loadAverage": [3.62, 5.85, 5.89]
+  },
+  "methodology": {
+    "unit": "nanoseconds",
+    "clock": "Bun.nanoseconds via mitata",
+    "minCpuTimeMs": 642,
+    "warmupRounds": 2000,
+    "batching": "disabled, so per-sample state is reset outside the timed region",
+    "sink": "none configured, so no delivery is measured",
+    "sqlite": "bun:sqlite at :memory: — real statements and real transactions, no disk"
+  },
+  "measurements": [
+    {
+      "journal": "plain",
+      "steps": 1,
+      "samples": 4757481,
+      "min": 41,
+      "p50": 125,
+      "p75": 125,
+      "p95": 125,
+      "p99": 333,
+      "max": 316834,
+      "avg": 134.7785788319491
+    },
+    {
+      "journal": "plain",
+      "steps": 5,
+      "samples": 2659398,
+      "min": 125,
+      "p50": 209,
+      "p75": 250,
+      "p95": 291,
+      "p99": 458,
+      "max": 366375,
+      "avg": 241.10923788015182
+    },
+    {
+      "journal": "plain",
+      "steps": 20,
+      "samples": 1050355,
+      "min": 458,
+      "p50": 542,
+      "p75": 583,
+      "p95": 750,
+      "p99": 916,
+      "max": 362833,
+      "avg": 610.5214589353124
+    },
+    {
+      "journal": "memory",
+      "steps": 1,
+      "samples": 323493,
+      "min": 1500,
+      "p50": 1709,
+      "p75": 1916,
+      "p95": 2333,
+      "p99": 4959,
+      "max": 460959,
+      "avg": 1980.6853749540176
+    },
+    {
+      "journal": "memory",
+      "steps": 5,
+      "samples": 116469,
+      "min": 4333,
+      "p50": 4917,
+      "p75": 5208,
+      "p95": 7625,
+      "p99": 9459,
+      "max": 459334,
+      "avg": 5502.2748971829415
+    },
+    {
+      "journal": "memory",
+      "steps": 20,
+      "samples": 33984,
+      "min": 15250,
+      "p50": 16875,
+      "p75": 18833,
+      "p95": 22042,
+      "p99": 28042,
+      "max": 474167,
+      "avg": 18859.897598870055
+    },
+    {
+      "journal": "sqlite",
+      "steps": 1,
+      "samples": 13519,
+      "min": 36292,
+      "p50": 41459,
+      "p75": 45250,
+      "p95": 107125,
+      "p99": 121709,
+      "max": 567750,
+      "avg": 47395.79894962645
+    },
+    {
+      "journal": "sqlite",
+      "steps": 5,
+      "samples": 6030,
+      "min": 86959,
+      "p50": 94041,
+      "p75": 104125,
+      "p95": 160125,
+      "p99": 179333,
+      "max": 566917,
+      "avg": 106253.4247097844
+    },
+    {
+      "journal": "sqlite",
+      "steps": 20,
+      "samples": 1945,
+      "min": 273417,
+      "p50": 332500,
+      "p75": 346792,
+      "p95": 382208,
+      "p99": 430334,
+      "max": 875917,
+      "avg": 328879.3665809769
+    }
+  ],
+  "derived": {
+    "plain": {
+      "perStepNs": 21.94736842105263,
+      "perRunFixedNs": 103.05263157894737
+    },
+    "memory": {
+      "perStepNs": 798.2105263157895,
+      "perRunFixedNs": 910.7894736842105
+    },
+    "sqlite": {
+      "perStepNs": 15317.947368421053,
+      "perRunFixedNs": 26141.052631578947
+    }
+  },
+  "whatYouMustWrite": [
+    {
+      "subject": "sagaflow",
+      "file": "bench/what-you-must-write/sagaflow.ts",
+      "lines": 43,
+      "code": 34
+    },
+    {
+      "subject": "hand-rolled try/catch",
+      "file": "bench/what-you-must-write/hand-rolled.ts",
+      "lines": 166,
+      "code": 130
+    },
+    {
+      "subject": "raw Cloudflare Workflows",
+      "file": "bench/what-you-must-write/cloudflare-workflows.ts",
+      "lines": 203,
+      "code": 155
+    }
+  ]
+}

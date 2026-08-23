@@ -7,16 +7,20 @@ a guarantee document that only lists guarantees is a marketing page.
 
 Three kinds of evidence appear here.
 
-| Evidence       | What it is                                                                                                    | Where                                |
-| -------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| Example tests  | one arrangement, one assertion. Proves the path exists and works.                                             | `test/*.test.ts`                     |
-| Property tests | hundreds of arrangements from a generator, one invariant. Proves the path works for inputs nobody thought of. | `test/properties/*.property.test.ts` |
-| Model checking | every interleaving of a bounded model, exhaustively. Proves there is no ordering that breaks it.              | [`formal/`](../formal/README.md)     |
+| Evidence       | What it is                                                                                                    | Where                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Example tests  | one arrangement, one assertion. Proves the path exists and works.                                             | `test/*.test.ts`                          |
+| Property tests | hundreds of arrangements from a generator, one invariant. Proves the path works for inputs nobody thought of. | [`test/properties/`](../test/properties/) |
+| Model checking | every interleaving of a bounded model, exhaustively. Proves there is no ordering that breaks it.              | [`formal/`](../formal/README.md)          |
 
 They answer different questions and none of them replaces another. A test says "this happened once".
 A property says "this holds across the input space we can generate". TLC says "there is no schedule
 in this model that reaches a bad state". Where the three disagree, the disagreement is the finding,
-and this page records three of those.
+and this page records five of those — all fixed, each with the test that pins it and the ablation
+that brings it back.
+
+What the guarantees cost, in nanoseconds per run and in lines you would otherwise write yourself,
+is measured in [`docs/benchmarks.md`](./benchmarks.md).
 
 ---
 
@@ -42,7 +46,7 @@ refusal sets the outcome to `failed` and the loop continues to the next one.
 
 **Evidence.** `test/engine.compensation.test.ts`, `test/engine.unwinding.test.ts`,
 `test/parallel.test.ts`, `test/engine.compensation-failure.test.ts`, `test/engine.inflight.test.ts`;
-property `test/properties/compensation-completeness.property.test.ts`; TLA+ `I4c_CompleteAtClose`
+property [`test/properties/compensation-completeness.property.test.ts`](../test/properties/compensation-completeness.property.test.ts); TLA+ `I4c_CompleteAtClose`
 (holds, exhaustive to four steps and four invocations).
 
 **Ordering, across invocations too.** Both halves hold, and the ordering half is the one that took
@@ -70,7 +74,7 @@ which is what a store with one atomic write does. The outbox inserts carry
 the case a durable re-invocation actually produces.
 
 **Evidence.** `test/outbox.test.ts`, `test/journal-failure.test.ts`,
-`test/lifecycle-completeness.test.ts`; property `test/properties/outbox-atomicity.property.test.ts`;
+`test/lifecycle-completeness.test.ts`; property [`test/properties/outbox-atomicity.property.test.ts`](../test/properties/outbox-atomicity.property.test.ts);
 TLA+ `I2_NoCompletedWithoutEvents` (holds).
 
 The model checks the strong form: across every interleaving of crash, replay, drain and sweep,
@@ -98,8 +102,8 @@ mark it. A mark that is lost means the batch is sent again, which is the safe di
 
 **Evidence.** `test/engine.replay.test.ts`, `test/engine.reinvocation.test.ts`,
 `test/outbox.sweep.test.ts`, `test/events.test.ts`; property
-`test/properties/at-least-once-dedupe.property.test.ts` and
-`test/properties/reinvocation-idempotency.property.test.ts`; TLA+ `I3_ExactlyOnceEffect` and
+[`test/properties/at-least-once-dedupe.property.test.ts`](../test/properties/at-least-once-dedupe.property.test.ts) and
+[`test/properties/reinvocation-idempotency.property.test.ts`](../test/properties/reinvocation-idempotency.property.test.ts); TLA+ `I3_ExactlyOnceEffect` and
 `I3b_DeliveredOnceWhenDrained` (both hold).
 
 The model earns this one rather than assuming it. `formal/SagaflowRandomIds.cfg` mints a fresh id

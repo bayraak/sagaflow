@@ -223,13 +223,20 @@ And the honest small print:
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | Run closed **and** its events written | **Atomic** — one write                                                                                        |
 | Event delivery to your sink           | **At-least-once** — the drain is best effort, a sweeper carries the rest, consumers dedupe on the envelope id |
-| Envelope ids                          | **Deterministic** — `${runId}:${ordinal}`                                                                     |
+| Envelope ids                          | **Deterministic** — `${runId}:${ordinal}` for an emission, `${runId}:completed` and the like for a closure    |
 | Step effects on retry                 | **Your call, with help** — we cannot make someone else's API exactly-once                                     |
 | Cancellation                          | **Cooperative** — at the next step boundary; a step already running is never interrupted                      |
 | Durable replay                        | **Steps memoised by name** — never reshape a deployed durable workflow                                        |
 
 There is no exactly-once delivery here, and nobody else has one either. What there is: an
 identity on every message and an outbox that never loses one.
+
+Each of those six is written out as a theorem — hypothesis, statement, mechanism, evidence — in
+[`docs/guarantees.md`](./docs/guarantees.md), alongside nine TLA+ invariants (all holding,
+exhaustively, at four steps and four invocations), four generative properties, five defects the
+model found and what closed each, and a section on what is **not** proven that is worth reading
+before the theorems. What it all costs in nanoseconds and in lines you have to write yourself is
+in [`docs/benchmarks.md`](./docs/benchmarks.md).
 
 ### What it is not
 
