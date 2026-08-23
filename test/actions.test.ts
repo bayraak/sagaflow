@@ -1,14 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import {
-  action,
-  actions,
-  saga,
-  sagaflow,
-  step,
-  type RunObserver,
-  type UndoSpec,
-} from 'sagaflow-js'
+import { action, actions, saga, sagaflow, step, type RunObserver, type UndoSpec } from 'sagaflow-js'
 import { createMemoryJournal } from 'sagaflow-js/memory'
 
 // The rule is "every effect is a step". A rule you have to remember at every call site is a rule

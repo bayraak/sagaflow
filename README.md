@@ -555,8 +555,8 @@ asleep for a week.
 sagaflow writes three tables through whatever already talks to your database. Bring your ORM's
 executor; we bring the SQL.
 
-| Adapter       | Import                     | For                                                  |
-| ------------- | -------------------------- | ---------------------------------------------------- |
+| Adapter       | Import               | For                                                  |
+| ------------- | -------------------- | ---------------------------------------------------- |
 | Memory        | `sagaflow-js/memory` | tests, and the worked reference for writing your own |
 | Cloudflare D1 | `sagaflow-js/d1`     | Workers                                              |
 | SQLite        | `sagaflow-js/sqlite` | `bun:sqlite` / `node:sqlite`                         |

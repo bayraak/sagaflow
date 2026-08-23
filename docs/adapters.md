@@ -4,11 +4,11 @@ The extension surface is three seams and nothing else. No plugin system, no `wit
 wrapper, no lifecycle hooks to register — an adapter is a small file that implements one
 contract.
 
-| Seam            | Contract                                                                                 | Shipped                                                                                          | Obvious next                                       |
-| --------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| Seam            | Contract                                                                                 | Shipped                                                                        | Obvious next                                       |
+| --------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------- |
 | `RunJournal`    | [journal.md](./journal.md)                                                               | `sagaflow-js/memory`, `sagaflow-js/sql` + `sagaflow/d1` + `sagaflow-js/sqlite` | Postgres, libSQL/Turso, Durable Object storage     |
-| `EventSink`     | `{ sendBatch(messages: { body: EventEnvelope }[]): Promise<unknown> }`                   | a Cloudflare Queue binding **is** one; `createMemorySink`                                        | SQS, pg-boss, an in-process bus                    |
-| `StepPrimitive` | `{ do(name, config, fn), sleep(name, duration), waitForEvent(name, { type, timeout }) }` | `sagaflow-js/cloudflare`                                                                   | Inngest, Restate, Temporal, Vercel Workflow DevKit |
+| `EventSink`     | `{ sendBatch(messages: { body: EventEnvelope }[]): Promise<unknown> }`                   | a Cloudflare Queue binding **is** one; `createMemorySink`                      | SQS, pg-boss, an in-process bus                    |
+| `StepPrimitive` | `{ do(name, config, fn), sleep(name, duration), waitForEvent(name, { type, timeout }) }` | `sagaflow-js/cloudflare`                                                       | Inngest, Restate, Temporal, Vercel Workflow DevKit |
 
 Framework glue is deliberately _not_ a seam. Resolving the tenant and the actor is always the
 application's job, so integration stays recipes rather than middleware.
