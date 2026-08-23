@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { executeDurable, requestCancellation, SagaError } from '@bayraak/sagaflow'
+import { executeDurable, requestCancellation, SagaError } from 'sagaflow-js'
 
 import { defineWorkflow } from '../src/define.js'
 import { defineStep } from '../src/step.js'
