@@ -4,6 +4,41 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html), with the usual pre-1.0 caveat: while
 the major version is `0`, a minor bump may contain a breaking change and a patch never will.
 
+## 0.1.2 — 2026-08-23
+
+The first five minutes: two lines instead of six, and no `async` where nothing waits.
+
+### Changed
+
+- **The zero-configuration path says one thing, once, per instance.** Two pieces of code had each
+  decided the not-durable warning was theirs to say, so a quickstart got both — a one-liner about
+  the in-memory default and a four-line paragraph underneath it, the second one repeated for every
+  instance including an explicit `sagaflow({})`. There is one now, and it says what is wrong, what
+  it costs and what to type instead:
+  `sagaflow: in-memory journal — state is lost when the process exits; pass a journal (sagaflow-js/sqlite or sagaflow-js/d1) before production.`
+  It still goes through `warn`, and a configured journal still silences it.
+- **The development logger folds a run's events into the run's own line.** It used to print each
+  envelope and its payload underneath the trail, lifecycle events included, so a two-step run
+  printed four times and the line that mattered scrolled away. One line now:
+  `[sagaflow] booking.create · run_1 · completed 1ms · reserve ✓ charge ✓ · 2 events (booking.created, workflow.completed)`.
+  The in-process sink still delivers and still marks delivered — so `flow.inspect` shows what a
+  real deployment would show — and prints nothing. Payloads are for `flow.inspect` and
+  `flow.explain`, where somebody went looking for them.
+
+### Added
+
+- **A step's work may be synchronous.** `run` and `undo` now take `MaybePromise<Output>` — the
+  engine has always awaited whatever they hand back, and awaiting a plain value is what `await`
+  is for. `step('check-totals', () => ({ data: check(input) }))` with no `Promise.resolve`, in
+  every form: the ambient verb, `wf.step`, a reusable `defineStep`, an `action()` target and an
+  `undo` that has nothing to wait for. Plenty of work is not asynchronous — totalling a basket,
+  deriving a reference, checking an invariant — and it is recorded as a step to hang an undo on
+  it, not because it waits for anybody. `MaybePromise` is exported for anybody writing the
+  signatures out. Widening only; every existing `async` step is unaffected.
+
+- **`onRunEnd` carries `events: string[]`** — the types the run queued in the batch that closed it,
+  in order, never their payloads. Additive; an existing observer is unaffected.
+
 ## 0.1.1 — 2026-08-23
 
 Published under the unscoped name **`sagaflow-js`**. The first release went out briefly under a
