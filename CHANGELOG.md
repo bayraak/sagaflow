@@ -4,9 +4,17 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html), with the usual pre-1.0 caveat: while
 the major version is `0`, a minor bump may contain a breaking change and a patch never will.
 
-## Unreleased → 0.1.1
+## 0.1.1 — 2026-08-23
 
-Everything below is on `main` and unreleased. The version is bumped at publish, not here.
+Published under the unscoped name **`sagaflow-js`**. The first release went out briefly under a
+scope; the scoped package is unpublished and every import specifier here reads `sagaflow-js`,
+with subpaths like `sagaflow-js/cloudflare`. The library, the repository and everything you type
+in a body are still `sagaflow`.
+
+A formal model of the run lifecycle was written and model-checked in this cycle. It found five
+defects. All five are fixed below, each with a test that reproduces the counterexample against
+the real engine and an ablation in `formal/` that removes the fix and watches the invariant fall
+again. If you are running 0.1.0 durably, upgrade.
 
 ### Added
 
@@ -28,7 +36,47 @@ Everything below is on `main` and unreleased. The version is bumped at publish, 
   `docs/launch/`** — where it sits, how it plugs into Hono, tRPC, Next.js, Express and Elysia,
   how to arrive from Medusa's workflow SDK, and what to say on the day.
 
-### Fixed
+### Fixed — the five the model found
+
+Every one of these needs a durable run, an unlucky crash window, and a re-invocation. None of
+them can happen to an inline run, which lives inside one request and is never invoked twice.
+
+- **A fully unwound run could close `completed`, with every one of its effects reversed.** The
+  worst answer this engine could give, and no invariant in the study caught it before it was
+  written down. A run unwinds, the instance dies before the write that would have recorded it,
+  and the run row still says `running`. Every step is memoised, so the re-invocation reaches the
+  end of the body without running anything fresh — and closes the run as a success. The caller is
+  told the work succeeded and nothing it did is standing. A run that has begun unwinding may no
+  longer finish.
+- **A re-invoked body walked past the point at which the run was closed.** Cooperative
+  cancellation is read from what `recordStep` returns, and a memoised step does not call
+  `recordStep`. A replay therefore did not notice a cancellation the first invocation noticed,
+  and ran steps for real against a run already recorded as fully undone. A durable invocation now
+  reads the run once before it runs anything and stops if it has already ended.
+- **A closed run could announce itself twice, under two different ids.** The lifecycle
+  announcement was minted at the next ordinal of the walk, so a longer walk gave it a different
+  id, and `on conflict do nothing` could not recognise the repeat. A closure is now identified by
+  the run: `${runId}:completed`, `${runId}:compensated`, `${runId}:swept`,
+  `${runId}:start-refused`. A run closes once, so its closure has one id, however far anybody
+  walked. `lifecycleEnvelopeId` is exported for anybody reasoning about their own outbox.
+- **A refused undo was retried by a later invocation, out of order.** A refusal is not
+  checkpointed, so the next invocation tried it again — after the undos that came later in
+  reverse order had already succeeded. The retry could then succeed and the run be written down
+  `compensated`, which reads as "unwound in reverse start order" and was not. A recorded refusal
+  is now final: the undo is not attempted again, the run closes `failed`, and the refused step is
+  named in the error.
+- **A run that had begun unwinding was carried forward into steps that never ran.** Same blind
+  spot, with the run still open: the replay does not re-read the flag that started the unwind, so
+  the body reached a fresh step and ran it, and its undo landed after an undo that started
+  earlier had already succeeded. A trail holding any compensation now stops the body advancing.
+
+- **The abandoned-run sweeper could displace an event a live run really emitted.** It minted its
+  announcement at ordinal 0 — sound about a run that is dead, and unsound as an identity, because
+  ordinal 0 is also the id of a run's own first emission. With the sweep window set shorter than
+  a request, the conflicting insert silently dropped the run's first event, which no amount of
+  re-delivery can repair.
+
+### Fixed — the rest
 
 - **The reference journal left `replayOf` undefined where a table stores `null`.** An assertion
   could pass against the in-memory adapter and fail against a real database, which is precisely
@@ -44,17 +92,35 @@ Everything below is on `main` and unreleased. The version is bumped at publish, 
   somebody is deciding how much they are signing up for, and a test fails if it stops matching
   the suite.
 
-### Still to merge before this ships
+### Evidence
 
-- Property-based tests for the four invariants (`test/properties/`).
-- Benchmarks and `docs/benchmarks.md` — engine overhead per step and per run, absolute numbers
-  only, methodology and machine stated.
-- The formal model (`formal/`).
+- **`formal/`** — a TLA+ model of the run lifecycle, the transactional outbox and both sweepers,
+  with eight TLC configurations. Two are the shipped design: every invariant holds, exhaustively,
+  at three steps and three invocations and again at four and four. Six are ablations, each
+  removing one thing the engine relies on — an optional journal read, deterministic envelope ids,
+  a sweep window set correctly, deterministic replay of a failed step — so that every finding can
+  be reproduced on demand. `formal/check.sh` compares all eight against what `formal/RESULTS.md`
+  records and fails when a model stops behaving as recorded, including when one that is supposed
+  to find a counterexample stops finding it.
+- **`test/properties/`** — four generative properties: compensation completeness, outbox
+  atomicity, re-invocation idempotency, at-least-once delivery with dedupe. Two hundred scenarios
+  each by default, on a fresh printed seed, each one stating the situations it must reach and
+  failing if a run never reached them.
+- **`docs/guarantees.md`** — the six promises as theorems, the nine TLA+ invariants with their
+  verdicts, the five findings with what closed each, and a section on what is not proven that is
+  worth reading before the theorems.
+- **`bench/` and `docs/benchmarks.md`** — engine overhead per run and per step against three
+  journals, absolute numbers with the machine stated, and the same mutation implemented three
+  times to count what you must write yourself.
 
-## 0.1.0 — unreleased
+### Note for journal authors
 
-Published as **`sagaflow-js`** — the unscoped name is reserved by npm's similarity
-rule. The library, the repository and everything you type in a body are still `sagaflow`.
+`getRun` and `listRunSteps` are still optional in the journal contract, and the durable executor
+skips its entry reads when they are absent. A journal without `listRunSteps` gives up three of
+the five fixes above; a journal without either gives up four. Every journal shipped here
+implements both. If you have written your own, implement both.
+
+## 0.1.0 — 2026-08-22
 
 First release. The engine is extracted from a production backend where it runs every domain
 mutation, and every gap found while reviewing it for extraction is closed here rather than
