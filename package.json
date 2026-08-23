@@ -1,6 +1,6 @@
 {
   "name": "sagaflow-js",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Sagas for TypeScript — compensating workflows that run inline in a request or durably on a workflow engine. Cloudflare Workflows adapter included.",
   "keywords": [
     "cloudflare-workflows",

@@ -4,6 +4,38 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html), with the usual pre-1.0 caveat: while
 the major version is `0`, a minor bump may contain a breaking change and a patch never will.
 
+## 0.1.3 — 2026-08-23
+
+Found by the first real adoption. One of these is a silent-wrong-answer bug: if you scope a flow
+with anything and then scope it again, upgrade.
+
+### Fixed
+
+- **`flow.for(extras)` merges over the scope it is called on instead of replacing it.** A scope
+  is built in layers and each layer knows a different thing: a worker knows its bindings at
+  module scope and nothing about who is asking, a request knows the tenant and the actor and
+  nothing about bindings. `for` replaced everything, so
+  `sagaflow({…}).for({ db, queries }).for({ tenantId })` left the body with no `db` and no
+  `queries` — and no error, because a body reading `ctx()` sees `undefined`, not a failure. It
+  adds now, later layers winning on any key they name, and `flow.scope` merges the same way.
+
+### Added
+
+- **`entrypointFor` and `workerFor` take a factory as well as an instance.** Inside a durable
+  instance there is no request and no module-scope moment that has your bindings — there is
+  `this.env`, handed to the class per invocation — so a host whose scope carries a database
+  client, its query helpers or an API client built from a secret had nowhere to build it:
+  `export class Sagas extends entrypointFor((env: Env) => createFlow(env)) {}`. The factory is
+  called once per env, which is once per isolate, and the entrypoint then adds the tenant and
+  the actor of the run it was invoked for on top of whatever scope the factory built. Same for
+  `workerFor(flowOrFactory, …)`, whose scheduled handler is likewise handed env and no request.
+  `createWorkflowEntrypoint` accepts `workflows` and `registry` as functions of env for the same
+  reason.
+- **`definitionOf(saga)` is exported** — what a durable saga was built from, for a host writing
+  its own entrypoint. `undefined` for an inline saga, deliberately: an inline run has no
+  instance, and handing a host something it could start one from is how a definition that was
+  never durable ends up with a workflow instance nobody can explain.
+
 ## 0.1.2 — 2026-08-23
 
 The first five minutes: two lines instead of six, and no `async` where nothing waits.
