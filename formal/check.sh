@@ -7,10 +7,11 @@
 #
 #   ./fetch-tools.sh
 #
-# Two of the seven models are the shipped design; they are expected to be
-# clean. The other five are ablations, each removing one thing the engine
-# relies on -- an optional journal read, deterministic envelope ids, a sweep
-# window set correctly. Four of those are EXPECTED to report a violated
+# Three of the eight models are the shipped design; they are expected to be
+# clean, and so is one ablation whose cleanliness is the point. The other
+# five ablations each remove one thing the engine might rely on -- an optional
+# journal read, deterministic envelope ids, deterministic replay of a failed
+# step, a sweep window set correctly. Four of those are EXPECTED to report a violated
 # invariant, because measuring what the missing thing buys is the point. See
 # RESULTS.md; the exit status of this script is the number of models whose
 # outcome differed from what RESULTS.md records.
@@ -33,6 +34,7 @@ models=(
   "Sagaflow.cfg:clean"
   "SagaflowDeep.cfg:clean"
   "SagaflowNoEntryGuard.cfg:clean"
+  "SagaflowFlakyReplay.cfg:clean"
   "SagaflowNoJournalReads.cfg:refuted"
   "SagaflowNoTrail.cfg:refuted"
   "SagaflowRandomIds.cfg:refuted"

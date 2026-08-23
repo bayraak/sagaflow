@@ -10,16 +10,21 @@ reaches a step the first invocation never did. A sweeper closing a run at the sa
 closes itself. A queue delivering an envelope the consumer has already seen. Those orderings are
 real, they are rare, and enumerating them by hand is how a guarantee quietly becomes a hope.
 
-| File                                               | What it is                                          |
-| -------------------------------------------------- | --------------------------------------------------- |
-| [`Sagaflow.tla`](./Sagaflow.tla)                   | the model and its invariants                        |
-| [`Sagaflow.cfg`](./Sagaflow.cfg)                   | every invariant this study states — six are refuted |
-| [`SagaflowProven.cfg`](./SagaflowProven.cfg)       | the invariants that hold, exhaustively              |
-| [`SagaflowDeep.cfg`](./SagaflowDeep.cfg)           | the same, one step and one invocation deeper        |
-| [`SagaflowNoCancel.cfg`](./SagaflowNoCancel.cfg)   | confines finding F1 to the cancellation path        |
-| [`SagaflowRandomIds.cfg`](./SagaflowRandomIds.cfg) | ablation: what deterministic envelope ids buy       |
-| [`SagaflowLiveSweep.cfg`](./SagaflowLiveSweep.cfg) | ablation: a sweeper window shorter than a request   |
-| [`RESULTS.md`](./RESULTS.md)                       | every run, every verdict, every counterexample      |
+| File                                                         | What it is                                               |
+| ------------------------------------------------------------ | -------------------------------------------------------- |
+| [`Sagaflow.tla`](./Sagaflow.tla)                             | the model and its invariants                             |
+| [`Sagaflow.cfg`](./Sagaflow.cfg)                             | the shipped design, every invariant this study states    |
+| [`SagaflowDeep.cfg`](./SagaflowDeep.cfg)                     | the same, one step and one invocation deeper             |
+| [`SagaflowNoEntryGuard.cfg`](./SagaflowNoEntryGuard.cfg)     | ablation: a journal that cannot read a run back          |
+| [`SagaflowNoTrail.cfg`](./SagaflowNoTrail.cfg)               | ablation: a journal that cannot read a trail back        |
+| [`SagaflowNoJournalReads.cfg`](./SagaflowNoJournalReads.cfg) | ablation: a journal with neither optional read           |
+| [`SagaflowFlakyReplay.cfg`](./SagaflowFlakyReplay.cfg)       | ablation: a platform that re-executes a step that failed |
+| [`SagaflowRandomIds.cfg`](./SagaflowRandomIds.cfg)           | ablation: what deterministic envelope ids buy            |
+| [`SagaflowLiveSweep.cfg`](./SagaflowLiveSweep.cfg)           | ablation: a sweeper window shorter than a request        |
+| [`RESULTS.md`](./RESULTS.md)                                 | every run, every verdict, every counterexample           |
+
+This study found five defects in the engine. All five are fixed; the ablations are how each one
+is brought back on demand, so a regression cannot pass quietly.
 
 ## Running it
 
@@ -28,7 +33,7 @@ real, they are rare, and enumerating them by hand is how a guarantee quietly bec
 ./check.sh
 ```
 
-`check.sh` runs all six models and compares each outcome against what `RESULTS.md` records. It
+`check.sh` runs all eight models and compares each outcome against what `RESULTS.md` records. It
 exits non-zero only when a model behaves differently from the record — including when a model
 that is supposed to find a counterexample stops finding one, which is how the findings get closed.
 

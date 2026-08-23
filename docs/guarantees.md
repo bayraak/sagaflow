@@ -45,8 +45,11 @@ refusal sets the outcome to `failed` and the loop continues to the next one.
 property `test/properties/compensation-completeness.property.test.ts`; TLA+ `I4c_CompleteAtClose`
 (holds, exhaustive to four steps and four invocations).
 
-**Caveat, proven.** The _completeness_ half is sound: a run recorded `compensated` has had every
-completed step undone. The _ordering_ half is narrower than it reads. See finding F2 below.
+**Ordering, across invocations too.** Both halves hold, and the ordering half is the one that took
+three findings to earn: a re-invocation neither retries an undo the run already recorded as refused
+(F2) nor carries the body forward into a step that never ran once the run has begun going down
+(F4). TLA+ `I4b_ReverseStartOrder` and `I4d_ReverseStartOrderAtClose` both hold; removing the
+trail read brings both down.
 
 ---
 
@@ -104,8 +107,10 @@ per invocation instead — what the engine did before this gap was closed — an
 `I3_ExactlyOnceEffect` in eleven states: two rows, two ids, one fact, two effects. The
 deterministic id is load-bearing, and that is the measurement of it.
 
-**Caveat, proven.** There is one case where a re-invoked body writes a _second_ lifecycle envelope
-under a different id. See finding F1 below.
+**Identity, across invocations too.** A lifecycle announcement is identified by the run rather than
+by how far the walk got — `${runId}:completed`, `${runId}:compensated`, `${runId}:swept`,
+`${runId}:start-refused` — so a longer walk cannot mint a second one under a different id, and two
+different closers cannot reach for the same one. That is findings F1 and F3, both closed.
 
 ---
 
@@ -216,25 +221,30 @@ first; a bug in code the model abstracts away hides from the second.
 Full statements, verdicts, counterexamples and bounds are in [`formal/RESULTS.md`](../formal/RESULTS.md).
 Summary:
 
-| Invariant                      | Claim                                                    | Verdict                  |
-| ------------------------------ | -------------------------------------------------------- | ------------------------ |
-| `I1_FinishExactlyOnce`         | exactly one terminal status, only after a close          | holds                    |
-| `NeverReopens`                 | a terminal status never changes again                    | holds                    |
-| `I2_NoCompletedWithoutEvents`  | `completed` implies every envelope is queued             | holds                    |
-| `I3_ExactlyOnceEffect`         | no fact is acted on twice, however often delivered       | holds                    |
-| `I3b_DeliveredOnceWhenDrained` | once everything is marked, every fact has been acted on  | holds                    |
-| `I4_CompensationCompleteness`  | compensated implies every completed step undone, once    | **refuted** — finding F1 |
-| `I4b_ReverseStartOrder`        | those undos ran in reverse start order                   | **refuted** — finding F2 |
-| `I4c_CompleteAtClose`          | the completeness claim, evaluated when the run closed    | holds                    |
-| `I4d_ReverseStartOrderAtClose` | the ordering claim, evaluated when the run closed        | **refuted** — finding F2 |
-| `I5_ReinvocationIdempotency`   | the outbox never changes after the close                 | **refuted** — finding F1 |
-| `I6_KeyExclusivity`            | at most one run holds a key at a time                    | holds                    |
-| `I7_OneClosureAnnounced`       | one lifecycle envelope per run, agreeing with the record | **refuted** — finding F1 |
-| `I8_NoEffectAfterClose`        | no step runs for real after the run has closed           | **refuted** — finding F1 |
+| Invariant                      | Claim                                                    | Verdict |
+| ------------------------------ | -------------------------------------------------------- | ------- |
+| `I1_FinishExactlyOnce`         | exactly one terminal status, only after a close          | holds   |
+| `NeverReopens`                 | a terminal status never changes again                    | holds   |
+| `I2_NoCompletedWithoutEvents`  | `completed` implies every envelope is queued             | holds   |
+| `I3_ExactlyOnceEffect`         | no fact is acted on twice, however often delivered       | holds   |
+| `I3b_DeliveredOnceWhenDrained` | once everything is marked, every fact has been acted on  | holds   |
+| `I4_CompensationCompleteness`  | compensated implies every completed step undone, once    | holds   |
+| `I4b_ReverseStartOrder`        | those undos ran in reverse start order                   | holds   |
+| `I4c_CompleteAtClose`          | the completeness claim, evaluated when the run closed    | holds   |
+| `I4d_ReverseStartOrderAtClose` | the ordering claim, evaluated when the run closed        | holds   |
+| `I5_ReinvocationIdempotency`   | the outbox never changes after the close                 | holds   |
+| `I6_KeyExclusivity`            | at most one run holds a key at a time                    | holds   |
+| `I7_OneClosureAnnounced`       | one lifecycle envelope per run, agreeing with the record | holds   |
+| `I8_NoEffectAfterClose`        | no step runs for real after the run has closed           | holds   |
+| `I9_CompletedUndidNothing`     | a run that closed `completed` undid nothing              | holds   |
 
-Bounds: three steps, three durable invocations, one lost delivery mark; 277,616 distinct states,
-exhaustive. Re-run at four steps and four invocations — 5,641,051 states, depth 55 — nothing new
+Bounds: three steps, three durable invocations, one lost delivery mark; 29,904 distinct states,
+exhaustive. Re-run at four steps and four invocations — 86,788 states, depth 27 — nothing new
 appears.
+
+Five of these were refuted when the study began. Each one is now held up by code that was written
+to answer it, and each has an ablation in `formal/` that takes that code away and watches the
+invariant fall again.
 
 ---
 
@@ -255,9 +265,10 @@ questions are elsewhere.
 | **Proper completion**   | When a run reaches a terminal status, nothing of it is still running.                                                                                           | Enforced. `compensate` awaits `Promise.allSettled` over in-flight steps before unwinding, and the success path throws on any unawaited step. |
 | **No dead transitions** | Every step in a body is reachable.                                                                                                                              | Not a property of the engine. A body with unreachable code is the author's business, as it is in any programming language.                   |
 
-Two honest notes. Proper completion is enforced _within an invocation_: the model shows a durable
-re-invocation walking a body whose run has already terminated, which is a violation of proper
-completion across invocations rather than within one. That is finding F1. And a WF-net's soundness
+Two honest notes. Proper completion is enforced across invocations as well as within one, and that
+took work: a durable invocation reads the run and its trail before it runs anything, and a run that
+has ended — or has begun unwinding — is not walked forward. That is findings F1, F4 and F5. And a
+WF-net's soundness
 says nothing at all about the outbox or the idempotency key, which is why the theorems above exist
 and why the TLA+ model was worth writing: the interesting failures in this system are not in the
 control flow, they are at the boundary between the control flow and a database.
@@ -272,37 +283,40 @@ repeated here.
 
 Read this section as carefully as the theorems.
 
-### Confirmed defects, found by the model
+### Defects the model found, and what closed them
 
-**F1 — a re-invoked durable body can walk past the point at which the run was closed.** If a
-cancellation is noticed, the run is closed `cancelled`, and the instance then crashes in the window
-between the finish batch committing and the platform checkpointing the `finish-run` step, the
-re-invocation replays the memoised steps — and a memoised step does not call `recordStep`, so it
-does not re-read the cancellation flag. The body therefore continues past where it stopped the
-first time: **steps that never ran now execute for real, against a run already recorded as fully
-undone**, and the second finish mints its lifecycle announcement at a higher ordinal, which is a
-different envelope id, so a **second `workflow.compensated` lands in the outbox**. The run record
-itself is safe — the `and status = 'running'` guard holds throughout, and `I1` is never violated.
-Confined to the cancellation path: with cancellation removed, every affected invariant holds.
-Full trace and the two candidate fixes in [`formal/RESULTS.md`](../formal/RESULTS.md#finding-f1--a-re-invoked-body-walks-past-the-point-at-which-the-run-was-closed).
+Five. Every one is fixed, every one has a test that reproduces the counterexample against the real
+engine, and every one has an ablation in `formal/` that removes the fix and watches the invariant
+fall again — so a regression cannot pass quietly.
 
-**F2 — reverse start order is the order undos are _attempted_, not the order they _succeed_.** The
-engine attempts every undo even when an earlier one refuses; a refused compensation is not
-checkpointed, so a re-invocation retries it — after the undos that already succeeded. A run can
-therefore be recorded `compensated`, meaning every completed step was reversed, while the reversals
-happened in forward order. Independent of cancellation. Until this is closed, read
-guarantee 1's ordering clause as: _within one invocation, undos are attempted in reverse start
-order; if one refuses and the instance is re-invoked, the retry runs after its neighbours._
-Full trace in [`formal/RESULTS.md`](../formal/RESULTS.md#finding-f2--a-refused-undo-retried-in-a-later-invocation-runs-out-of-order).
+| Finding | What it was                                                                                                         | Closed by                                                              | Pinned by                |
+| ------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------ |
+| **F1**  | A re-invoked body walked past the point at which the run was closed, and announced the closure twice under two ids. | The entry guard, and lifecycle ids that are a function of the run.     | `test/formal-f1.test.ts` |
+| **F2**  | A refused undo was retried by a later invocation, landing after undos that started later had already succeeded.     | A recorded refusal is final; the run closes `failed` and names it.     | `test/formal-f2.test.ts` |
+| **F3**  | The abandoned-run sweeper's announcement took ordinal 0 — the id of a live run's own first emission.                | `${runId}:swept` and `${runId}:start-refused`.                         | `test/formal-f3.test.ts` |
+| **F4**  | A run that had begun unwinding was carried forward into a step that never ran, undoing out of order.                | A trail holding any compensation stops the body advancing.             | `test/formal-f4.test.ts` |
+| **F5**  | A fully unwound run whose steps were all memoised reached the end of its body and closed **completed**.             | The same trail read; a run that began unwinding may not finish either. | `test/formal-f5.test.ts` |
 
-**F3 — the abandoned-run sweeper's announcement can collide with the run's own first event.**
-`sweepAbandonedRuns` mints its announcement at ordinal 0, which is also the id of a run's first
-emission. If the sweeper's window is shorter than the request — which the documentation warns
-against, and which is therefore a misconfiguration rather than an inherent flaw — a live inline run
-can be closed by the sweeper and then have its own finish arrive: the conflicting insert silently
-drops the run's first event, and the outbox ends up holding a `compensated` announcement and a
-`completed` lifecycle for the same run. Full trace in
-[`formal/RESULTS.md`](../formal/RESULTS.md#finding-f3--the-abandoned-run-sweeper-collides-with-the-run-it-is-closing).
+F5 is the one worth staring at. Every invariant in the study was content with it — the run closed
+exactly once, its events were queued, one lifecycle envelope, no effect after the close — and it is
+nevertheless the worst state this engine could reach: the caller told the work succeeded, with
+every effect it produced already reversed. It is why `I9` exists. An invariant set that has never
+been surprised is an invariant set that has not been looked at hard enough.
+
+Full traces, root causes and the ablation that reproduces each are in
+[`formal/RESULTS.md`](../formal/RESULTS.md).
+
+**One residual, by configuration.** `sweepAbandonedRuns` needs a window comfortably longer than
+your longest inline request. Set it shorter and the sweeper closes runs that are still going: the
+run's own finish still arrives afterwards, so the outbox grows after the close and holds two
+closure announcements for one run. Nothing is lost — that was F3 — but the run is closed twice over
+by two different closers, which is what the misconfiguration means. `formal/SagaflowLiveSweep.cfg`
+measures it.
+
+**Two residuals, by journal capability.** `getRun` and `listRunSteps` are optional in the journal
+contract, and the durable executor skips its entry reads when they are absent. A journal without
+`listRunSteps` brings back F2, F4 and F5; a journal without either brings back F1 as well. Every
+journal shipped in this package implements both. If you write your own, implement both.
 
 ### Stated non-goals, unchanged
 
@@ -314,8 +328,9 @@ features.
 
 **Cancellation is cooperative, and its latency is unbounded in principle.** A step already running
 is never interrupted; the request is noticed at the next step boundary. A step that takes ten
-minutes delays the cancellation by ten minutes. And, per F1, a boundary that replays from a memo is
-not a boundary at which the flag is read at all.
+minutes delays the cancellation by ten minutes. A boundary that replays from a memo is not a
+boundary at which the flag is read at all, either — which is why a re-invocation reads the run and
+its trail before it runs anything, rather than relying on the flag alone.
 
 **An external effect and the record of it are not atomic.** The model assumes that a step which
 returns to the body has been checkpointed. It says nothing about the window between calling
@@ -342,9 +357,12 @@ The model is bounded — four steps, four invocations, one run, one key, one con
 abstracts wall-clock time, batch sizes and retry counts. An exhaustive check of a bounded model is
 not a proof about the unbounded system; it is a very thorough search for a counterexample in the
 region where counterexamples of this shape live. The assumptions it rests on are enumerated in
-[`formal/RESULTS.md`](../formal/RESULTS.md#what-the-model-assumes), and one of them — that a
-journalled step failure repeats on replay — is a claim about the platform rather than about this
-code.
+[`formal/RESULTS.md`](../formal/RESULTS.md#what-the-model-assumes). One of them used to be a claim
+about the platform rather than about this code — that a step which exhausted its retries repeats
+its failure on replay, which Cloudflare's documentation does not say either way. It is no longer
+assumed: `formal/SagaflowFlakyReplay.cfg` lets such a step run again and succeed, and is clean,
+because a run that has begun unwinding is not carried forward into any step that is not already
+recorded completed.
 
 ---
 
