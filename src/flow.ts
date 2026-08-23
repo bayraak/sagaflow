@@ -194,8 +194,25 @@ export const sagaflow: {
       runtime,
       config,
       announce,
-      for: (next) => build(next),
-      scope: (scoped, body) => runInScope(build(scoped), body),
+      /*
+       * A layer ADDS what it knows.
+       *
+       * A worker knows its bindings at module scope and nothing about who is asking; a request
+       * knows the tenant and the actor and nothing about bindings; a durable instance gets its
+       * env when it is invoked and its tenant from the run it was started for. So `for` is
+       * called more than once on the way in, and a `for` that replaced everything would make
+       * the last caller responsible for knowing what every earlier one had put there — which is
+       * the coupling scoping exists to remove, and which fails silently, because a body sees
+       * `undefined` rather than an error.
+       */
+      for: (next) =>
+        build({
+          tenantId: next.tenantId ?? runtime.tenantId,
+          actor: next.actor === undefined ? runtime.actor : next.actor,
+          ...(runtime.ctx as Record<string, unknown>),
+          ...next,
+        }),
+      scope: (scoped, body) => runInScope(flow.for(scoped), body),
       run: async (name, input) => {
         announce()
         const declared = byName.get(name)
@@ -215,15 +232,17 @@ export const sagaflow: {
         if (!run) throw new Error(`no run ${runId} to replay`)
 
         const declared = byName.get(run.name)
-        const definition = declared === undefined ? undefined : definitionOf(declared)
-        if (!definition) throw new Error(`no saga is registered as "${run.name}" to replay`)
+        if (!declared) throw new Error(`no saga is registered as "${run.name}" to replay`)
 
         // An inline run has no instance to start. Replaying one would create a durable instance
         // for a definition that was never durable, which is a stranger failure than being told
         // no — run the inline saga again yourself, which is all a replay of one could mean.
-        if (declared?.durable !== true) {
+        if (declared.durable !== true) {
           throw new Error(`"${run.name}" is not durable, so there is no instance to replay`)
         }
+
+        const definition = definitionOf(declared)
+        if (!definition) throw new Error(`no saga is registered as "${run.name}" to replay`)
 
         return flow.startDurable(definition, run.input, { replayOf: runId })
       },

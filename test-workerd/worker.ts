@@ -1,12 +1,14 @@
 import { entrypointFor, workerFor } from '../src/cloudflare/index.js'
-import { bindings, flow, saveThing, saveThingBadly, shipThing } from './definitions.js'
+import { bindings, flow, flowFrom, saveThing, saveThingBadly, shipThing } from './definitions.js'
 
-// The whole durable wiring, in one line. `class_name` in wrangler.jsonc points at this name.
-export class SagaflowTestWorkflow extends entrypointFor(flow) {}
+// The whole durable wiring, in one line — from a factory, because inside an instance there is
+// no request, only `this.env`, and a host's scope is built from its bindings.
+// `class_name` in wrangler.jsonc points at this name.
+export class SagaflowTestWorkflow extends entrypointFor(flowFrom) {}
 
 // And the whole worker: a fetch handler, and everything else this library needs in every worker
 // that uses it.
-export default workerFor(flow, {
+export default workerFor(flowFrom, {
   onEvent: async (envelope) => {
     await bindings.DB.prepare('insert or ignore into delivered (id, type) values (?, ?)')
       .bind(envelope.id, envelope.type)

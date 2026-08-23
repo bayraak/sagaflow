@@ -3,6 +3,9 @@ import { entrypointFor, workerFor } from 'sagaflow-js/cloudflare'
 import { chaseBooking, createBooking, flow } from './sagas.js'
 
 // One class for every durable saga you have. `class_name` in wrangler.jsonc points at this name.
+// Both of these take a factory — `entrypointFor((env) => createFlow(env))` — when your scope is
+// built out of bindings rather than being the bindings; inside an instance there is no request
+// and no module scope with your env in it. This example's scope is just the bindings.
 export class Sagas extends entrypointFor(flow) {}
 
 // fetch is yours; queue and scheduled are the two handlers every sagaflow worker needs.

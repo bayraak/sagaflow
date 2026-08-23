@@ -95,6 +95,24 @@ describe('a durable run on a real Workflows binding', () => {
     expect(events.every((event) => event.dispatched_at !== null)).toBe(true)
   }, 30_000)
 
+  /*
+   * Inside an instance there is no request, only this.env, so the entrypoint is given a factory
+   * and calls it per env. What that factory put in the scope has to survive the tenant and the
+   * actor being added on top of it — a `for` that replaced the scope instead of adding to it
+   * left the body with `undefined` and no error, which is the expensive kind of wrong.
+   */
+  it('carries both what env built and what the run was started for into the body', async () => {
+    const started = await call('/durable?mark=SHIP-SCOPE&tenant=tenant_b')
+
+    await settle(started.runId)
+
+    const scope = await first<{ built_from: string; tenant_id: string }>(
+      'select built_from, tenant_id from scopes where run_id = ?',
+      `${started.runId}:0`,
+    )
+    expect(scope).toEqual({ built_from: 'env', tenant_id: 'tenant_b' })
+  }, 30_000)
+
   it('answers a second request for the same work with the run already doing it', async () => {
     const started = await call('/durable?mark=SHIP-2')
     const again = await call('/durable?mark=SHIP-2')

@@ -115,12 +115,23 @@ export type AnySaga = DurableSaga<never, unknown> | InlineSaga<never, unknown>
 
 const definitions = new WeakMap<object, unknown>()
 
+/**
+ * The durable definition a saga was built from — what a custom entrypoint dispatches to, and
+ * what `entrypointFor` registers for you.
+ *
+ * Nothing for an inline saga, and deliberately so: an inline run has no instance, and handing a
+ * host something it could start one from is how a definition that was never durable ends up
+ * with a workflow instance nobody can explain.
+ */
 export const definitionOf = (
   candidate: object,
-): DurableWorkflow<WorkflowRuntime, StandardSchemaV1, unknown> | undefined =>
-  definitions.get(candidate) as
+): DurableWorkflow<WorkflowRuntime, StandardSchemaV1, unknown> | undefined => {
+  if ((candidate as { durable?: unknown }).durable !== true) return undefined
+
+  return definitions.get(candidate) as
     | DurableWorkflow<WorkflowRuntime, StandardSchemaV1, unknown>
     | undefined
+}
 
 /**
  * Which instance a call belongs to: the one it was handed, else the one it is scoped inside,

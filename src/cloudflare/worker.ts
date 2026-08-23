@@ -2,6 +2,7 @@ import type { Flow } from '../flow.js'
 import { sweepEventOutbox } from '../outbox.js'
 import { sweepAbandonedRuns } from '../sweep.js'
 import type { EventEnvelope, EventSchemaMap } from '../types.js'
+import type { FlowSource } from './entrypoint.js'
 
 export type QueueOptions = {
   /** What to do with each event. Without one, a delivered message is only acknowledged. */
@@ -59,8 +60,15 @@ export const handleQueue =
  * anybody wire two handlers for them.
  */
 export const handleScheduled =
-  <Events extends EventSchemaMap>(flow: Flow<Events>, options: SweepOptions = {}) =>
-  async (): Promise<void> => {
+  <Env, Events extends EventSchemaMap>(
+    source: FlowSource<Env, Events>,
+    options: SweepOptions = {},
+  ) =>
+  // Cloudflare hands a scheduled handler its env, which is the only place a factory could be
+  // called from — there is no request here either.
+  async (_controller?: unknown, env?: Env): Promise<void> => {
+    const flow: Flow<Events> =
+      typeof source === 'function' ? source(env as Env) : (source as Flow<Events>)
     const journal = flow.runtime.journal
     const sink = flow.runtime.events
 
@@ -86,16 +94,19 @@ export const handleScheduled =
  * Everything else a sagaflow worker needs — draining the outbox to a consumer, sweeping what the
  * drain could not deliver, closing runs nobody was left to finish — is the same in every worker
  * that uses this library, so it is written once here rather than copied into each one.
+ *
+ * Takes an instance or a factory, the same as `entrypointFor`: a scheduled handler is handed its
+ * env and no request, so a host that builds its scope from bindings has nowhere else to do it.
  */
-export const workerFor = <Events extends EventSchemaMap>(
-  flow: Flow<Events>,
+export const workerFor = <Env, Events extends EventSchemaMap>(
+  source: FlowSource<Env, Events>,
   options: { fetch?: ExportedHandlerFetchHandler } & QueueOptions & SweepOptions = {},
 ): {
   fetch?: ExportedHandlerFetchHandler
   queue: ReturnType<typeof handleQueue>
-  scheduled: ReturnType<typeof handleScheduled>
+  scheduled: ReturnType<typeof handleScheduled<Env, Events>>
 } => ({
   ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
   queue: handleQueue(options),
-  scheduled: handleScheduled(flow, options),
+  scheduled: handleScheduled(source, options),
 })

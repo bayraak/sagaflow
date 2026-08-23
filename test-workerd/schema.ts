@@ -13,6 +13,7 @@ const statementsOf = (sql: string): string[] =>
 const fixtures = [
   'create table if not exists things (id text primary key, tenant_id text not null, mark text not null)',
   'create table if not exists delivered (id text primary key, type text not null)',
+  'create table if not exists scopes (run_id text primary key, built_from text not null, tenant_id text not null)',
 ]
 
 export const applySchema = async (db: D1Database): Promise<void> => {
@@ -22,7 +23,14 @@ export const applySchema = async (db: D1Database): Promise<void> => {
 }
 
 export const truncate = async (db: D1Database): Promise<void> => {
-  for (const table of ['saga_outbox', 'saga_run_steps', 'saga_runs', 'things', 'delivered']) {
+  for (const table of [
+    'saga_outbox',
+    'saga_run_steps',
+    'saga_runs',
+    'things',
+    'delivered',
+    'scopes',
+  ]) {
     await db.prepare(`delete from ${table}`).run()
   }
 }

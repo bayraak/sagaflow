@@ -36,6 +36,7 @@ export {
   type StepUndo,
 } from './ambient.js'
 export {
+  definitionOf,
   saga,
   type AnySaga,
   type CallOptions,

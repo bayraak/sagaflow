@@ -132,6 +132,11 @@ await createBooking({ seat: '12A' }, flow.for({ tenantId: 'acme', actor: user.id
 
 Not one line of the saga changes.
 
+`for` **adds** to the scope it is called on rather than replacing it, so the layer that knows the
+bindings and the layer that knows who is asking never have to know about each other:
+`sagaflow({…}).for({ db, queries })` at module scope, `.for({ tenantId, actor })` per request,
+and `ctx()` inside the body sees all four.
+
 **Verbs are awaited, reads are not.** `step`, `all`, `emit`, `sleep` and `waitForEvent` return
 promises and every example awaits them; `ctx()` and `runId()` are plain reads. A step you start
 and forget to await fails the run by name rather than letting it be recorded as completed while
@@ -614,7 +619,12 @@ you want events delivered, and two crons:
 ```
 
 one for `sweepEventOutbox`, one for `sweepAbandonedRuns`. Export the entrypoint class from your
-worker module, apply `schema.sql` with `wrangler d1 migrations apply`, and deploy. **Named
+worker module, apply `schema.sql` with `wrangler d1 migrations apply`, and deploy.
+
+`entrypointFor` and `workerFor` take either an instance or a factory,
+`export class Sagas extends entrypointFor((env: Env) => createFlow(env)) {}` — inside a durable
+instance there is no request and no module-scope moment that has your bindings, only `this.env`,
+so a scope built out of them has to be built there. **Named
 environments inherit nothing** — repeat every binding in every environment block. Redeploys obey
 [`docs/versioning.md`](./docs/versioning.md).
 

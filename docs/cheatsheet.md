@@ -83,7 +83,7 @@ caller's trail as `child/step`.
 ```ts
 const flow = sagaflow({ journal, events, eventSchemas, launcher, sagas, observer })
 sagaflow.configure({ journal }) // replace the default instance
-flow.for({ tenantId, actor, ...extras }) // one scope per request; extras reach ctx()
+flow.for({ tenantId, actor, ...extras }) // merges over the scope it is called on; extras reach ctx()
 flow.scope({ tenantId }, () => createBooking(input))
 ```
 
@@ -114,9 +114,13 @@ bunx sagaflow schema > migrations/0001.sql // grown-up path
 ## Cloudflare
 
 ```ts
-export class Sagas extends entrypointFor(flow) {}
-export default workerFor(flow, { onEvent, fetch })
+export class Sagas extends entrypointFor((env: Env) => createFlow(env)) {}
+export default workerFor((env: Env) => createFlow(env), { onEvent, fetch })
 ```
+
+A factory because inside an instance there is no request, only `this.env`. Called once per env;
+the entrypoint then adds the run's tenant and actor on top of whatever scope it built. Pass the
+instance itself instead when the scope is nothing but bindings.
 
 Bindings: `d1_databases`, `workflows` (`class_name` = your class), `queues` producer + consumer,
 `triggers.crons`. `compatibility_flags: ["nodejs_compat"]` is required. Named environments

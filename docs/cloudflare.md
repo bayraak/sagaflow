@@ -33,6 +33,47 @@ export default workerFor(flow, {
 handlers every sagaflow worker needs — a queue consumer for the outbox, and a scheduled handler
 that runs both sweepers — around your own `fetch`.
 
+## A scope built from env
+
+`import { env } from 'cloudflare:workers'` is enough while the scope is just the bindings. It is
+not enough as soon as the scope carries things you build out of them — a database client, its
+query helpers, an API client with a key from a secret — because inside a durable instance there
+is no request and no module-scope moment that has your bindings. There is `this.env`, handed to
+the class per invocation.
+
+So both take a factory:
+
+```ts
+import { entrypointFor, workerFor } from 'sagaflow-js/cloudflare'
+
+const createFlow = (env: Env) => {
+  const db = drizzle(env.DB)
+
+  return sagaflow({
+    journal: createD1Journal(env.DB),
+    events: env.EVENTS,
+    launcher: env.WORKFLOWS,
+    sagas: [createBooking, chaseInvoice],
+  }).for({ db, queries: queriesFor(db) })
+}
+
+export class Sagas extends entrypointFor((env: Env) => createFlow(env)) {}
+
+export default workerFor((env: Env) => createFlow(env), { onEvent, fetch })
+```
+
+The factory is called once per env — once per isolate in practice — and the entrypoint then adds
+the tenant and the actor of the run it was invoked for. `ctx()` inside the body sees all of it:
+
+```ts
+const { db, queries, tenantId, actor } = ctx<{ db: Db; queries: Queries }>()
+```
+
+Adding, not replacing: `for` merges over the scope it is called on, so the layer that knows the
+bindings and the layer that knows who is asking do not have to know about each other. That is
+also what makes the request path work — `flow.for({ tenantId, actor })` in a route keeps
+everything the module-scope instance was built with.
+
 ## Bindings
 
 ```jsonc
@@ -52,6 +93,14 @@ that runs both sweepers — around your own `fetch`.
 
 `nodejs_compat` is required: the ambient verbs use `AsyncLocalStorage`, which is the only thing
 that answers "which saga am I in" correctly when two runs are in flight at once.
+
+## Dispatching from your own entrypoint
+
+`entrypointFor` is `createWorkflowEntrypoint` with the registry and the runtime taken from an
+instance, and both of those accept a function of env too. If you need the class itself —
+different dispatch, extra instrumentation, a `WorkflowEntrypoint` subclass of your own —
+`definitionOf(saga)` gives you what a durable saga was built from, and `undefined` for an inline
+one, which has no instance to start.
 
 **Named environments inherit nothing.** Every binding has to be repeated in every `env` block. A
 binding missing from one of them is a deploy that works in dev and fails in production.
