@@ -106,16 +106,26 @@ const developmentObserver = (): RunObserver => {
 
       console.info(
         `[sagaflow] ${fact.name} · ${fact.runId} · ${fact.status} ${fact.durationMs}ms` +
-          (trail.length > 0 ? ` · ${trail.join(' ')}` : ''),
+          (trail.length > 0 ? ` · ${trail.join(' ')}` : '') +
+          (fact.events.length > 0
+            ? ` · ${fact.events.length} event${fact.events.length === 1 ? '' : 's'} (${fact.events.join(', ')})`
+            : ''),
       )
     },
   }
 }
 
+/*
+ * One line, once, per instance.
+ *
+ * It has a budget of about two lines before somebody stops reading, and this is the one that
+ * matters: what is wrong, what it costs, and what to type instead. A four-line paragraph saying
+ * the same thing three ways is read as decoration and skipped, which is the opposite of the
+ * point.
+ */
 const notDurable =
-  'sagaflow is running with no journal, so its state is in memory and not durable. ' +
-  'Everything is lost when this process exits and nothing is shared between processes. ' +
-  'Pass a journal — sagaflow-js/d1 or sagaflow-js/sqlite — before this goes anywhere real.'
+  'sagaflow: in-memory journal — state is lost when the process exits; ' +
+  'pass a journal (sagaflow-js/sqlite or sagaflow-js/d1) before production.'
 
 /**
  * Configure sagaflow once.
@@ -140,13 +150,13 @@ export const sagaflow: {
   let warned = false
 
   const journal = config.journal ?? createMemoryJournal().journal
-  const events =
-    config.events ??
-    (ephemeral
-      ? createInProcessSink((envelope) => {
-          console.info(`[sagaflow] ${envelope.type}`, envelope.payload)
-        })
-      : undefined)
+  /*
+   * Delivery happens in process so that the quickstart has a whole outbox — events queued in the
+   * closing batch, delivered, and marked delivered, so `flow.inspect` shows what a real
+   * deployment would show. It prints nothing. What a run emitted belongs on the run's own line,
+   * and a payload belongs where somebody went looking for it: `flow.inspect`, `flow.explain`.
+   */
+  const events = config.events ?? (ephemeral ? createInProcessSink(() => undefined) : undefined)
   // One line per run, and only when nobody brought their own observer. A development log that
   // says what happened in the order it happened beats five that say a fragment each.
   const observer = config.observer ?? (ephemeral ? developmentObserver() : undefined)

@@ -80,6 +80,7 @@ export type {
   InlineStepOptions,
   LifecycleEventPayloads,
   LifecycleEventType,
+  MaybePromise,
   RunJournal,
   RunObserver,
   RunOutcome,

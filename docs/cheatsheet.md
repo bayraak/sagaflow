@@ -57,6 +57,9 @@ await chaseInvoice.startAll(inputs, flow) // durable, batched
 `Promise.all([step(…), step(…)])` is the parallel group. `if`, `for`, `try` are the control flow.
 A step you start and forget to `await` fails the run by name.
 
+`run` and `undo` may be synchronous — `() => Output` as well as `async () => Output`. A step that
+totals a basket is still worth recording and still worth undoing; it just has nothing to wait for.
+
 ## Bind the undo to the effect
 
 ```ts

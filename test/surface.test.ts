@@ -132,7 +132,7 @@ describe('configuring it once', () => {
     await write({ mark: 'b' }, flow)
 
     expect(warnings).toHaveLength(1)
-    expect(warnings[0]).toContain('not durable')
+    expect(warnings[0]).toContain('in-memory journal')
   })
 })
 

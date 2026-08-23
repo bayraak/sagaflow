@@ -21,6 +21,7 @@ import type {
   CompensationOutcome,
   CompensationReason,
   InlineStepOptions,
+  MaybePromise,
   Step,
   EmitFn,
   EventEnvelope,
@@ -71,7 +72,7 @@ type Undo<Ctx> = {
   seq: number
   name: string
   config: StepRetryConfig
-  run(ctx: StepContext<Ctx>, reason: CompensationReason): Promise<void>
+  run(ctx: StepContext<Ctx>, reason: CompensationReason): MaybePromise<void>
 }
 
 export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
@@ -583,6 +584,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
       name,
       status: outcome,
       durationMs: Date.now() - startedAt,
+      events: [announcement.type],
     }))
 
     throw new SagaError({
@@ -631,6 +633,7 @@ export const executeRun = async <Ctx extends WorkflowRuntime, Output>(options: {
     name,
     status: 'completed' as const,
     durationMs: Date.now() - startedAt,
+    events: held.map((envelope) => envelope.type),
   }))
 
   const sink = ctx.events

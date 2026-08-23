@@ -112,7 +112,10 @@ Inside a saga each call is a step — named after the function, recorded, retrie
 any other. **Outside a saga it is exactly the function it wraps**, so the same
 `reserveSeat` is safe to call from a script, a test or a route that is not a saga at all.
 
-Use the inline `step(name, run, undo)` form for ad-hoc work that has no home of its own.
+Use the inline `step(name, run, undo)` form for ad-hoc work that has no home of its own. Both
+`run` and `undo` may be synchronous — `(ctx) => Output | Promise<Output>` — because a step that
+totals a basket or derives a reference is still worth recording and still worth undoing, and has
+nothing to wait for.
 
 That is a complete saga: a step that knows how to undo itself, a run record, and an event
 written down atomically with the run and delivered afterwards. It runs with nothing configured —

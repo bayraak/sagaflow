@@ -66,6 +66,16 @@ export type CompensationOutcome = Exclude<RunOutcome, 'completed'>
 
 export type StepStatus = 'compensated' | 'completed' | 'failed'
 
+/**
+ * What the engine accepts wherever it is going to `await` the answer anyway.
+ *
+ * Plenty of work is not asynchronous — totalling a basket, deriving a reference, checking an
+ * invariant — and a step exists to record that it happened and to hang an undo on it, not
+ * because it waits for anybody. Demanding `async` there is a tax paid to a signature rather than
+ * to the runtime.
+ */
+export type MaybePromise<Value> = Value | Promise<Value>
+
 export type StepBackoff = 'constant' | 'exponential' | 'linear'
 
 export type StepRetryConfig = {
@@ -277,7 +287,18 @@ export type RunObserver = {
     status: StepStatus
     durationMs: number
   }): void
-  onRunEnd?(fact: { runId: string; name: string; status: RunOutcome; durationMs: number }): void
+  /**
+   * `events` are the TYPES the run queued in the batch that closed it, in order — never their
+   * payloads. A payload is somebody's invoice; it belongs where a person went looking for it,
+   * not in a log line that scrolls past.
+   */
+  onRunEnd?(fact: {
+    runId: string
+    name: string
+    status: RunOutcome
+    durationMs: number
+    events: string[]
+  }): void
   /**
    * A call that is not an effect, reported and not journalled.
    *
@@ -377,19 +398,19 @@ export type CompensationReason = {
 export type Step<Ctx, Input, Output> = {
   name: string
   config: StepRetryConfig
-  run(input: Input, ctx: StepContext<Ctx>): Promise<Output>
-  undo?(output: Output, ctx: StepContext<Ctx>, reason: CompensationReason): Promise<void>
+  run(input: Input, ctx: StepContext<Ctx>): MaybePromise<Output>
+  undo?(output: Output, ctx: StepContext<Ctx>, reason: CompensationReason): MaybePromise<void>
 }
 
 /** Everything a step declared inline may say about itself beyond its name and its work. */
 export type InlineStepOptions<Ctx, Output> = StepBudget & {
-  undo?(output: Output, ctx: StepContext<Ctx>, reason: CompensationReason): Promise<void>
+  undo?(output: Output, ctx: StepContext<Ctx>, reason: CompensationReason): MaybePromise<void>
 }
 
 /** Everything a reusable step is, apart from its name. */
 export type StepOptions<Ctx, Input, Output> = StepBudget & {
   /** The work. Answers with what it did. */
-  run(input: Input, ctx: StepContext<Ctx>): Promise<Output>
+  run(input: Input, ctx: StepContext<Ctx>): MaybePromise<Output>
   /**
    * How to undo it, given exactly what `run` returned — and why it is being undone, because a
    * refund note that says "the customer changed their mind" reads differently from one that
@@ -398,7 +419,7 @@ export type StepOptions<Ctx, Input, Output> = StepBudget & {
    * The word is `undo` throughout the API. The run record still says `compensated`, because
    * that is what the literature and the status column call it.
    */
-  undo?(output: Output, ctx: StepContext<Ctx>, reason: CompensationReason): Promise<void>
+  undo?(output: Output, ctx: StepContext<Ctx>, reason: CompensationReason): MaybePromise<void>
 }
 
 /**
@@ -421,7 +442,7 @@ export type WorkflowHandle<Ctx> = {
    */
   step<Output>(
     name: string,
-    run: (ctx: StepContext<Ctx>) => Promise<Output>,
+    run: (ctx: StepContext<Ctx>) => MaybePromise<Output>,
     options?: InlineStepOptions<Ctx, Output>,
   ): StepCall<Output>
   emit: EmitFn<EventsOf<Ctx>>
