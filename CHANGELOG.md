@@ -4,6 +4,41 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html), with the usual pre-1.0 caveat: while
 the major version is `0`, a minor bump may contain a breaking change and a patch never will.
 
+## 0.1.4 — 2026-08-23
+
+**Events are derived from the run, not emitted by the body.** An effect declares what it
+announces where it declares how it is undone; a run declares what its completion announces where
+it declares its name; a body announces nothing. A line in the middle of a body announces
+something that has not happened yet — the run can still fail on the next line, and then the
+outbox holds a claim about a change that was undone. The engine always dropped it; the shape of
+the API invited writing it anyway.
+
+### Added
+
+- **`saga(name, { announce }, body)`.** `(output, input) => [type, payload]`, an array of those,
+  or `null` for a run with nothing to say. Everything an announcement gets anywhere else it gets
+  here: validated against `eventSchemas`, held until the run closes, written in the batch that
+  closes it, given an id from the same deterministic scheme so a re-invoked durable body
+  announces once, and dropped entirely if the run is undone. `workflow.completed` and
+  `workflow.compensated` are unchanged.
+
+  `output` is typed from what the body returns whenever TypeScript can see it before it types the
+  callback — which is every body whose own parameter is annotated. A body that takes its
+  parameter type from an input schema is checked in a later pass, so annotate what you are
+  announcing about: `announce: (invoice: Invoice) => [...]`. It is checked against the body's
+  return either way, and the payload is validated at runtime regardless.
+
+### Deprecated
+
+- **`emit`.** Still exported, still works, gone in 0.2. Declare it on the step, the action or the
+  saga instead. Every example, every document and the quickstart now do.
+
+### Changed
+
+- The README, the cheat sheet, `SKILL.md`, both runnable examples and the design doc are written
+  around declared announcements. The design rule reads: effects declare how they are undone and
+  what they announce; sagas declare what their completion announces; bodies announce nothing.
+
 ## 0.1.3 — 2026-08-23
 
 Found by the first real adoption. One of these is a silent-wrong-answer bug: if you scope a flow
