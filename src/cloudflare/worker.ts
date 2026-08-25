@@ -66,16 +66,20 @@ export const handleScheduled =
   ) =>
   // Cloudflare hands a scheduled handler its env, which is the only place a factory could be
   // called from — there is no request here either.
-  async (_controller?: unknown, env?: Env): Promise<void> => {
+  async (controller?: unknown, env?: Env): Promise<void> => {
     const flow: Flow<Events> =
       typeof source === 'function' ? source(env as Env) : (source as Flow<Events>)
     const journal = flow.runtime.journal
     const sink = flow.runtime.events
+    // The moment the cron fired for, when the platform says: a sweep reads the clock it was
+    // scheduled on, so a test can ask for tomorrow's cron rather than wait for it.
+    const now = scheduledTimeOf(controller)
 
     if (sink) {
       await sweepEventOutbox({
         journal,
         sink,
+        ...(now === undefined ? {} : { now }),
         ...(options.outboxOlderThanMs === undefined
           ? {}
           : { olderThanMs: options.outboxOlderThanMs }),
@@ -84,9 +88,16 @@ export const handleScheduled =
 
     await sweepAbandonedRuns({
       journal,
+      ...(now === undefined ? {} : { now }),
       olderThanMs: options.abandonedAfterMs ?? defaultAbandonedAfterMs,
     })
   }
+
+const scheduledTimeOf = (controller: unknown): number | undefined => {
+  const scheduledTime = (controller as { scheduledTime?: unknown } | undefined)?.scheduledTime
+
+  return typeof scheduledTime === 'number' ? scheduledTime : undefined
+}
 
 /**
  * The whole module worker, given an instance and your fetch handler.
