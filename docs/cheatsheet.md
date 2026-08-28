@@ -121,8 +121,9 @@ export class Sagas extends entrypointFor((env: Env) => createFlow(env)) {}
 export default workerFor((env: Env) => createFlow(env), { onEvent, fetch })
 ```
 
-A factory because inside an instance there is no request, only `this.env`. Called once per env;
-the entrypoint then adds the run's tenant and actor on top of whatever scope it built. Pass the
+A factory because inside an instance there is no request, only `this.env`. Called for every
+run — what it opens belongs to that invocation — and the entrypoint then adds the run's tenant
+and actor on top of whatever scope it built. Pass the
 instance itself instead when the scope is nothing but bindings.
 
 Bindings: `d1_databases`, `workflows` (`class_name` = your class), `queues` producer + consumer,

@@ -73,13 +73,16 @@ export const shipThing = saga(
  * A worker's bindings are not available where a class is declared — they arrive with the
  * invocation — so the entrypoint takes a factory and calls it with `this.env`.
  */
+let builds = 0
+
 export const flowFrom = (workerEnv: TestEnv) =>
   sagaflow({
     journal: createD1Journal(workerEnv.DB),
     events: workerEnv.EVENTS,
     launcher: workerEnv.WORKFLOWS,
     sagas: [saveThing, saveThingBadly, shipThing],
-  }).for({ builtFrom: 'env' })
+    // Numbered so a test can tell one build from the next.
+  }).for({ builtFrom: `env#${++builds}` })
 
 /** Configured once, at module scope, from the worker's own bindings. */
 export const flow = sagaflow({

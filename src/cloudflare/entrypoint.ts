@@ -113,7 +113,7 @@ export const createWorkflowEntrypoint = <Env, Ctx extends WorkflowRuntime>(
  * Inside a durable instance there is no request. There is `this.env`, handed to the class per
  * invocation, and nothing else — so a host whose scope carries a database handle, its query
  * helpers or any other binding cannot have built that scope where the class was declared. It
- * passes a factory instead, and the entrypoint calls it with the env it was invoked with.
+ * passes a factory instead, and the entrypoint calls it with the env of every run it executes.
  */
 export type FlowSource<Env, Events extends EventSchemaMap> =
   | Flow<Events>
@@ -142,26 +142,14 @@ const durableDefinitionsOf = <Events extends EventSchemaMap>(
 export const entrypointFor = <Env, Events extends EventSchemaMap>(
   source: FlowSource<Env, Events>,
 ): WorkflowEntrypointClass<Env> => {
-  // Once per env — which is once per isolate — rather than once per invocation. A factory
-  // builds a journal, a sink and whatever else a host's scope carries, and none of that wants
-  // rebuilding every time an instance wakes up.
-  const built = new WeakMap<object, Flow<Events>>()
-
-  const flowOf = (env: Env): Flow<Events> => {
-    if (typeof source !== 'function') return source
-    if (env === null || typeof env !== 'object') return source(env)
-
-    const cached = built.get(env)
-    if (cached) return cached
-
-    const flow = source(env)
-    built.set(env, flow)
-
-    return flow
-  }
+  const flowOf = (env: Env): Flow<Events> => (typeof source === 'function' ? source(env) : source)
 
   return createWorkflowEntrypoint<Env, WorkflowRuntime<Events>>({
+    // The registry is pure, so `createWorkflowEntrypoint` keeps it per env; the flow built to
+    // read the definitions off is used for nothing else.
     workflows: (env) => durableDefinitionsOf(flowOf(env)) as never[],
+    // Built for every run. What a factory opens — a database client above all — belongs to the
+    // invocation that opened it: the platform refuses it from the next one at the first query.
     runtime: (env, params) =>
       flowOf(env).for({ tenantId: params.tenantId, actor: params.actor }).runtime,
   })

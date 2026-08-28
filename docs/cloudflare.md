@@ -62,8 +62,9 @@ export class Sagas extends entrypointFor((env: Env) => createFlow(env)) {}
 export default workerFor((env: Env) => createFlow(env), { onEvent, fetch })
 ```
 
-The factory is called once per env — once per isolate in practice — and the entrypoint then adds
-the tenant and the actor of the run it was invoked for. `ctx()` inside the body sees all of it:
+The factory is called for every run — a database client it opens belongs to the invocation that
+opened it, and the platform refuses it from the next one — and the entrypoint then adds the
+tenant and the actor of the run it was invoked for. Only the registry, which is pure, is kept. `ctx()` inside the body sees all of it:
 
 ```ts
 const { db, queries, tenantId, actor } = ctx<{ db: Db; queries: Queries }>()

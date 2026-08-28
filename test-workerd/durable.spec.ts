@@ -110,7 +110,29 @@ describe('a durable run on a real Workflows binding', () => {
       'select built_from, tenant_id from scopes where run_id = ?',
       `${started.runId}:0`,
     )
-    expect(scope).toEqual({ built_from: 'env', tenant_id: 'tenant_b' })
+    expect(scope).toMatchObject({ tenant_id: 'tenant_b' })
+    expect(scope?.built_from).toMatch(/^env#\d+$/)
+  }, 30_000)
+
+  /*
+   * What the factory builds belongs to the invocation that called it: a database client opened
+   * in one invocation cannot be used from the next, and the platform says so at the first query.
+   * So the factory is called for every run, and only the registry — which is pure — is kept.
+   */
+  it('builds the scope for every run rather than remembering the first', async () => {
+    const one = await call('/durable?mark=SHIP-BUILD-1')
+    const two = await call('/durable?mark=SHIP-BUILD-2')
+
+    await settle(one.runId)
+    await settle(two.runId)
+
+    const built = await all<{ built_from: string }>(
+      'select built_from from scopes where run_id in (?, ?) order by built_from',
+      `${one.runId}:0`,
+      `${two.runId}:0`,
+    )
+    expect(built).toHaveLength(2)
+    expect(built[0]?.built_from).not.toBe(built[1]?.built_from)
   }, 30_000)
 
   it('answers a second request for the same work with the run already doing it', async () => {
