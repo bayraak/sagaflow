@@ -4,6 +4,20 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html), with the usual pre-1.0 caveat: while
 the major version is `0`, a minor bump may contain a breaking change and a patch never will.
 
+## 0.1.5 — 2026-08-28
+
+### Fixed
+
+- **`entrypointFor` calls the factory for every run.** It remembered the first flow per env — once
+  per isolate — and handed every later instance the scope that flow was built with. A scope that
+  carries a database client opened in one invocation is refused by the platform from the next
+  (`Cannot perform I/O on behalf of a different request`), so the second durable run in an
+  isolate errored at its first query. The registry is pure and is still kept per env; the runtime
+  is built per run. The workerd suite now starts two runs and checks they were built apart.
+- **`handleScheduled` sweeps by the cron's `scheduledTime`**, and by the wall clock only when
+  there is no controller to read one from — so a test can fire tomorrow's cron rather than wait
+  for it.
+
 ## 0.1.4 — 2026-08-23
 
 **Events are derived from the run, not emitted by the body.** An effect declares what it
